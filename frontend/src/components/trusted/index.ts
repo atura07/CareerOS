@@ -1,0 +1,2 @@
+export { TrustedCompanies } from './TrustedCompanies'
+

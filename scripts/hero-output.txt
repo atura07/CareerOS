@@ -1,0 +1,17 @@
+Launching browser...
+Browser launched
+Navigating to http://localhost:5173...
+Page loaded
+Found 1 .career-hero element(s)
+Screenshot saved to: c:/Users/yadaa/OneDrive/Desktop/CareerOS/hero-section-screenshot.png
+
+=== CONSOLE OUTPUT ===
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+=== ERRORS ===
+No page errors or runtime errors found ✓
+
+Done!
+Screenshot file size: 33.5 KB
