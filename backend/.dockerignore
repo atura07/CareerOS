@@ -1,0 +1,10 @@
+# Keep the Docker build context minimal and clean.
+target/
+uploads/
+*.log
+build_*.txt
+build*.txt
+.idea/
+*.iml
+*.class
+
