@@ -154,9 +154,7 @@ export function ResumeLibrary({ refreshCounter = 0, onSelectResume }: ResumeLibr
       ?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  const hasActiveFilters = searchQuery.trim().length > 0 || activeTags.length > 0
-
-  return (
+return (
     <div className="space-y-6">
       {/* Toolbar */}
       <ResumeToolbar

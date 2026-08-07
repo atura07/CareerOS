@@ -22,8 +22,8 @@ public class CorsConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Allowed origin(s) — frontend dev server
-        configuration.setAllowedOrigins(List.of("http://localhost:5174"));
+// Allowed origin(s) — frontend dev server
+        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:5174"));
 
         // Allowed HTTP methods
         configuration.setAllowedMethods(List.of(

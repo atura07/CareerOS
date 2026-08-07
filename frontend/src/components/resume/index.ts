@@ -8,6 +8,7 @@ export { ResumeListView } from './ResumeListView'
 export { ResumeEmptyState } from './ResumeEmptyState'
 export { ResumeGridSkeleton, ResumeListSkeleton } from './ResumeSkeleton'
 export { ResumeRenameModal } from './ResumeRenameModal'
+export { JobDescriptionAnalyzer } from './JobDescriptionAnalyzer'
 export type { ResumeFile, ResumeTag, ViewMode, SortOption } from './types'
 export { MOCK_RESUMES, RESUME_TAGS, AVAILABLE_TAGS } from './resumeData'
 

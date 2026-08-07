@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 
 interface AuthUser {
   email: string
@@ -58,4 +58,3 @@ export function useAuth(): AuthContextType {
   if (!ctx) throw new Error('useAuth must be used within an AuthProvider')
   return ctx
 }
-

@@ -11,8 +11,9 @@ import org.springframework.web.bind.annotation.*;
  * REST controller for ATS resume analysis.
  * <p>
  * Endpoints:
- *   GET /api/v1/ats/analyze/{resumeId} — Analyze an already-uploaded resume by ID
- *   POST /api/v1/ats/analyze/text      — Analyze raw extracted text directly
+ *   GET  /api/v1/ats/analyze/{resumeId} — Analyze an already-uploaded resume by ID
+ *   POST /api/v1/ats/analyze/text        — Analyze raw extracted text directly
+ *   POST /api/ats/analyze                — Analyze resume against a job description (Phase 2)
  */
 @RestController
 @RequestMapping("/api/v1/ats")
@@ -22,10 +23,13 @@ public class AtsController {
 
     private final AtsService atsService;
     private final ResumeService resumeService;
+    private final AtsAnalysisService atsServiceV2;
 
-    public AtsController(AtsService atsService, ResumeService resumeService) {
+    public AtsController(AtsService atsService, ResumeService resumeService,
+                         AtsAnalysisService atsServiceV2) {
         this.atsService = atsService;
         this.resumeService = resumeService;
+        this.atsServiceV2 = atsServiceV2;
     }
 
     /**
@@ -71,6 +75,32 @@ public class AtsController {
                 request.text() != null ? request.text().length() : 0);
 
         AtsResponse response = atsService.analyzeText(request.text());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Analyze a resume against a job description (Phase 2).
+     * <p>
+     * Accepts a resume ID and job description text, then delegates to ATSService
+     * for keyword extraction, matching, and scoring. Currently returns a
+     * placeholder response; real logic will be implemented in a future sprint.
+     *
+     * @param request body containing resumeId and jobDescription
+     * @return ATSAnalysisResponse with score, matched/missing keywords, and suggestions
+     */
+    @PostMapping("/api/ats/analyze")
+    public ResponseEntity<ATSAnalysisResponse> analyzeResumeAgainstJobDescription(
+            @RequestBody ATSAnalysisRequest request) {
+
+        log.info("POST /api/ats/analyze — resumeId={}, jobDescriptionLength={}",
+                request.getResumeId(),
+                request.getJobDescription() != null ? request.getJobDescription().length() : 0);
+
+        ATSAnalysisResponse response = atsServiceV2.analyze(
+                request.getResumeId(),
+                request.getJobDescription()
+        );
+
         return ResponseEntity.ok(response);
     }
 

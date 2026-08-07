@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ResumeUploader, ResumeLibrary, ResumePreview } from '../components/resume'
+import { ResumeUploader, ResumeLibrary, ResumePreview, JobDescriptionAnalyzer } from '../components/resume'
 import type { ResumeFile } from '../components/resume'
 
 export function ResumePage() {
@@ -43,9 +43,10 @@ export function ResumePage() {
           />
         </div>
 
-        {/* Right column — preview */}
-        <div className="lg:col-span-2">
+        {/* Right column — preview + JD analyzer */}
+        <div className="space-y-6 lg:col-span-2">
           <ResumePreview resume={selectedResume} />
+          <JobDescriptionAnalyzer resume={selectedResume} />
         </div>
       </div>
     </div>

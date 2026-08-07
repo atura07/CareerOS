@@ -3,6 +3,8 @@ node_modules/
 dist/
 dist-ssr/
 *.local
+frontend/tsc-out.txt
+frontend/full-ts-errors.txt
 
 # ─── Java / Maven / Backend ─────────────────────────────
 build/
@@ -13,6 +15,9 @@ target/
 *.ear
 *.log
 spring-boot-devtools/
+backend/build_*.txt
+*.hprof
+hs_err_pid*
 
 # ─── Uploaded Files (runtime) ──────────────────────────
 uploads/
@@ -21,6 +26,10 @@ uploads/
 .env
 .env.local
 .env.*.local
+.env.production
+.env.*.production
+!frontend/.env.example
+backend/src/main/resources/application.local.properties
 
 # ─── IDE / Editor ───────────────────────────────────────
 .idea/
@@ -34,6 +43,9 @@ uploads/
 *.njsproj
 *.sln
 *.sw?
+.project
+.classpath
+.settings/
 
 # ─── OS Files ───────────────────────────────────────────
 .DS_Store
@@ -55,4 +67,7 @@ lerna-debug.log*
 *.swp
 *.swo
 *~
+*.tsbuildinfo
+coverage/
+.nyc_output/
 

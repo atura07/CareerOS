@@ -1,6 +1,6 @@
 import { httpClient } from './httpClient'
 import { ENDPOINTS } from './endpoints'
-import type { AtsResponse, AnalyzeTextRequest } from './types'
+import type { AtsResponse, AnalyzeTextRequest, ATSAnalysisResponse } from './types'
 
 /**
  * Analyze a previously uploaded resume by its ID.
@@ -27,6 +27,21 @@ export async function analyzeText(
   const response = await httpClient.post<AtsResponse>(
     ENDPOINTS.ATS_ANALYZE_TEXT,
     data,
+  )
+  return response.data
+}
+
+/**
+ * Analyze a resume against a job description.
+ * POST /api/ats/analyze
+ */
+export async function analyzeResumeAgainstJobDescription(
+  resumeId: number,
+  jobDescription: string,
+): Promise<ATSAnalysisResponse> {
+  const response = await httpClient.post<ATSAnalysisResponse>(
+    ENDPOINTS.ATS_ANALYZE_JD,
+    { resumeId, jobDescription },
   )
   return response.data
 }

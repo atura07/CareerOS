@@ -4,11 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard,
   FileText,
-  BarChart3,
+BarChart3,
   Code2,
   Mic,
   Map,
   Briefcase,
+  Building2,
+  GitBranch,
   LogOut,
   X,
   Menu,
@@ -25,11 +27,15 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   { label: 'Resume', icon: FileText, path: '/dashboard/resume' },
+{ label: 'Companies', icon: Building2, path: '/dashboard/companies' },
+{ label: 'LeetCode', icon: Code2, path: '/dashboard/leetcode' },
+{ label: 'GitHub', icon: GitBranch, path: '/dashboard/github' },
   { label: 'ATS Score', icon: BarChart3, path: '/dashboard/ats' },
   { label: 'DSA Tracker', icon: Code2, path: '/dashboard/dsa' },
   { label: 'Mock Interview', icon: Mic, path: '/dashboard/interview' },
-  { label: 'Roadmap', icon: Map, path: '/dashboard/roadmap' },
-  { label: 'Applications', icon: Briefcase, path: '/dashboard/applications' },
+{ label: 'Roadmap Generator', icon: Map, path: '/dashboard/roadmap' },
+{ label: 'Applications', icon: Briefcase, path: '/dashboard/applications' },
+  { label: 'Analytics', icon: BarChart3, path: '/dashboard/analytics' },
 ]
 
 export function Sidebar() {
@@ -170,4 +176,3 @@ export function Sidebar() {
     </>
   )
 }
-
