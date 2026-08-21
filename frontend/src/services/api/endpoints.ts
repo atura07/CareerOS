@@ -30,5 +30,8 @@ export const ENDPOINTS = {
   // Roadmaps
   ROADMAPS: '/v1/roadmaps',
   ROADMAP_BY_ID: (id: number) => `/v1/roadmaps/${id}`,
+
+  // Dashboard
+  DASHBOARD_SUMMARY: '/v1/dashboard/summary',
 } as const
 

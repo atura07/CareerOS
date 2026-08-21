@@ -78,10 +78,21 @@ export type {
   AtsSuggestion,
   AtsResponse,
   ATSAnalysisResponse,
-  AnalyzeTextRequest,
   ApplicationDto,
   RoadmapDto,
   ApiError,
 } from './types'
+
+export { dashboardService } from './dashboardService'
+export type {
+  DashboardSummaryResponse,
+  PlacementReadinessData,
+  JourneyStatusData,
+  JourneyCardStatus,
+  NextActionData,
+  RecentActivityData,
+  ProfileCompletionData,
+  ConsistencyData,
+} from './dashboardService'
 
 

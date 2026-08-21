@@ -1,6 +1,11 @@
 export { Sidebar } from './Sidebar'
 export { Topbar } from './Topbar'
+export { DashboardHero } from './DashboardHero'
+export { PlacementJourney } from './PlacementJourney'
+export { PlacementReadinessCard } from './PlacementReadinessCard'
+export { NextActions } from './NextActions'
+export { RecentActivity } from './RecentActivity'
+export { ProfileCompletionCard } from './ProfileCompletionCard'
+export { ConsistencyBanner } from './ConsistencyBanner'
 export { DashboardCards } from './DashboardCards'
 export { QuickActions } from './QuickActions'
-export { RecentActivity } from './RecentActivity'
-
