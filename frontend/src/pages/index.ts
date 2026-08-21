@@ -1,5 +1,6 @@
 export { LandingPage } from './LandingPage'
-export { LoginPage, RegisterPage } from './auth'
+export { LoginPage, RegisterPage, VerifyEmailPage } from './auth'
+
 export { DashboardPage } from './DashboardPage'
 export { ResumePage } from './ResumePage'
 export { CompanyPage } from './CompanyPage'

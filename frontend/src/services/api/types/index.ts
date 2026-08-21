@@ -11,11 +11,33 @@ export interface AuthenticationRequest {
   password: string
 }
 
-export interface AuthenticationResponse {
-  token: string
-  email: string
-  fullName: string
+export interface GoogleAuthRequest {
+  idToken: string
 }
+
+export interface SendOtpRequest {
+  email: string
+  purpose?: string
+}
+
+export interface VerifyOtpRequest {
+  email: string
+  otp: string
+}
+
+export interface ResendOtpRequest {
+  email: string
+}
+
+
+export interface AuthenticationResponse {
+  token?: string
+  email: string
+  fullName?: string
+  verified?: boolean
+  message?: string
+}
+
 
 // ─── Resume Types ──────────────────────────────────────────────────────────
 

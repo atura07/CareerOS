@@ -1,6 +1,13 @@
 export { httpClient } from './httpClient'
 export { ENDPOINTS } from './endpoints'
-export { registerUser, authenticateUser } from './authService'
+export {
+  registerUser,
+  authenticateUser,
+  loginWithGoogle,
+  sendOtpUser,
+  verifyOtpUser,
+  resendOtpUser,
+} from './authService'
 export { uploadResume, listResumes, getResume, deleteResume } from './resumeService'
 export {
   listApplications,
@@ -20,8 +27,14 @@ export { analyzeResumeById, analyzeText, analyzeResumeAgainstJobDescription } fr
 export type {
   RegisterRequest,
   AuthenticationRequest,
+  GoogleAuthRequest,
+  SendOtpRequest,
+  VerifyOtpRequest,
+  ResendOtpRequest,
   AuthenticationResponse,
   ResumeResponse,
+
+
   KeywordMatch,
   AtsSuggestion,
   AtsResponse,

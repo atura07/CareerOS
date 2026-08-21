@@ -3,7 +3,9 @@ import {
   LandingPage,
   LoginPage,
   RegisterPage,
+  VerifyEmailPage,
   PlacementDashboardPage,
+
   ResumePage,
 CompanyPage,
 CompanyDetailsPage,
@@ -45,6 +47,8 @@ export function AppRouter() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+
 
       {/* Protected */}
 <Route

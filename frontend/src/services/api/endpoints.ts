@@ -6,6 +6,12 @@ export const ENDPOINTS = {
   // Auth
   AUTH_REGISTER: '/v1/auth/register',
   AUTH_AUTHENTICATE: '/v1/auth/authenticate',
+  AUTH_GOOGLE: '/v1/auth/google',
+  AUTH_SEND_OTP: '/v1/auth/otp/send',
+  AUTH_VERIFY_OTP: '/v1/auth/verify-otp',
+  AUTH_RESEND_OTP: '/v1/auth/resend-otp',
+
+
 
   // Resume
   RESUME_UPLOAD: '/v1/resume/upload',

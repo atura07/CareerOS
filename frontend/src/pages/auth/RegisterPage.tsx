@@ -11,8 +11,9 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react'
+import { GoogleLogin } from '@react-oauth/google'
 import { useAuth } from '../../contexts/AuthContext'
-import { registerUser } from '../../services/api'
+import { registerUser, loginWithGoogle } from '../../services/api'
 
 export function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -32,6 +33,29 @@ export function RegisterPage() {
       ? password === confirmPassword
       : null // null = not yet checked
 
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    setError(null)
+    setSubmitting(true)
+    try {
+      if (!credentialResponse?.credential) {
+        throw new Error('No credential received from Google')
+      }
+      const response = await loginWithGoogle({ idToken: credentialResponse.credential })
+      if (response.token) {
+        login(response.token, response.email, response.fullName || '')
+        navigate('/dashboard', { replace: true })
+      }
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.error ||
+        err?.message ||
+        'Google authentication failed. Please try again.'
+      setError(message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -48,8 +72,9 @@ export function RegisterPage() {
         email,
         password,
       })
-      login(response.token, response.email, response.fullName)
-      navigate('/dashboard', { replace: true })
+      navigate(`/verify-email?email=${encodeURIComponent(email)}&purpose=verify`, {
+        state: { message: response.message || 'Verification code sent to your email.' },
+      })
     } catch (err: any) {
       const message =
         err?.response?.data?.error ||
@@ -68,7 +93,34 @@ export function RegisterPage() {
       title="Create your account"
       subtitle="Start your placement journey with CareerOS"
     >
-      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+      <div className="space-y-4">
+        {/* Google One-Click Register */}
+        <div className="flex flex-col items-center justify-center">
+          <div className="w-full flex justify-center [&>div]:w-full [&>div]:flex [&>div]:justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError('Google sign-in was cancelled or failed.')}
+              theme="filled_black"
+              shape="pill"
+              text="signup_with"
+              size="large"
+              width="340"
+            />
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="relative my-3">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-white/[0.08]" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-[#05070c] px-3 text-white/40">or register with email</span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+
         {/* Full Name */}
         <div>
           <label
@@ -228,18 +280,8 @@ export function RegisterPage() {
           )}
         </button>
 
-        {/* Divider */}
-        <div className="relative my-4">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-white/[0.06]" />
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-[#05070c] px-2 text-white/30">or</span>
-          </div>
-        </div>
-
         {/* Login link */}
-        <p className="text-center text-sm text-white/40">
+        <p className="text-center text-xs text-white/40 pt-2 border-t border-white/[0.04]">
           Already have an account?{' '}
           <Link
             to="/login"
@@ -248,8 +290,10 @@ export function RegisterPage() {
             Sign in
           </Link>
         </p>
-      </form>
+        </form>
+      </div>
     </AuthLayout>
   )
 }
+
 

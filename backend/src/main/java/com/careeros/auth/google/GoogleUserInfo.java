@@ -1,4 +1,4 @@
-package com.careeros.auth;
+package com.careeros.auth.google;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,18 +9,9 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AuthenticationResponse {
-
-    private String token;
-
+public class GoogleUserInfo {
     private String email;
-
     private String fullName;
-
-    @Builder.Default
-    private boolean verified = false;
-
-    private String message;
+    private boolean emailVerified;
+    private String pictureUrl;
 }
-
-

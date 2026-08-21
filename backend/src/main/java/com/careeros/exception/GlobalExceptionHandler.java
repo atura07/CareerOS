@@ -49,9 +49,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ResponseEntity<Map<String, Object>> handleEmailNotVerified(
+            EmailNotVerifiedException ex) {
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("error", ex.getMessage());
+        body.put("errorCode", ex.getErrorCode());
+        body.put("email", ex.getEmail());
+        body.put("emailVerified", false);
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, String>> handleBadCredentials(
             BadCredentialsException ex) {
+
 
         Map<String, String> body = new HashMap<>();
         body.put("error", "Invalid email or password");
