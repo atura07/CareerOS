@@ -12,17 +12,22 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/companies")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class CompanyController {
 
     private final CompanyService companyService;
 
     @GetMapping
     public ResponseEntity<List<CompanyDto>> getAllCompanies() {
-        return ResponseEntity.ok(companyService.getAllCompanies());
+        log.info("[COMPANIES] Fetching all active companies...");
+        List<CompanyDto> list = companyService.getAllCompanies();
+        log.info("[COMPANIES] Found {} active companies", list.size());
+        return ResponseEntity.ok(list);
     }
 
     @GetMapping("/{slug}")
     public ResponseEntity<CompanyDetailDto> getCompanyBySlug(@PathVariable String slug) {
+        log.info("[COMPANIES] Fetching details for slug: {}", slug);
         return ResponseEntity.ok(companyService.getCompanyBySlug(slug));
     }
 

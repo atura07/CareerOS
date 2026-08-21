@@ -20,26 +20,37 @@ public class CompanyDataSeeder implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (companyRepository.count() > 0) {
-            log.info("Companies table already seeded (count={}). Skipping seed.", companyRepository.count());
-            return;
+        try {
+            long count = companyRepository.count();
+            if (count > 0) {
+                log.info("Companies table already seeded (count={}). Skipping seed.", count);
+                return;
+            }
+
+            log.info("Seeding production company profiles, interview processes, and preparation topics...");
+
+            List<CompanyEntity> companies = List.of(
+                    buildGoogle(),
+                    buildMicrosoft(),
+                    buildAmazon(),
+                    buildAtlassian(),
+                    buildAdobe(),
+                    buildGoldmanSachs(),
+                    buildUber(),
+                    buildFlipkart()
+            );
+
+            for (CompanyEntity company : companies) {
+                if (!companyRepository.existsBySlug(company.getSlug())) {
+                    companyRepository.save(company);
+                    log.info("Seeded company: {}", company.getName());
+                }
+            }
+
+            log.info("Successfully completed company data seeding.");
+        } catch (Exception e) {
+            log.error("Error during company data seeding: {}", e.getMessage(), e);
         }
-
-        log.info("Seeding production company profiles, interview processes, and preparation topics...");
-
-        List<CompanyEntity> companies = List.of(
-                buildGoogle(),
-                buildMicrosoft(),
-                buildAmazon(),
-                buildAtlassian(),
-                buildAdobe(),
-                buildGoldmanSachs(),
-                buildUber(),
-                buildFlipkart()
-        );
-
-        companyRepository.saveAll(companies);
-        log.info("Successfully seeded {} companies with interview processes and preparation topics.", companies.size());
     }
 
     private CompanyEntity buildGoogle() {

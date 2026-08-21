@@ -70,11 +70,13 @@ public class InterviewSessionEntity {
     private String feedbackSummary;
 
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.BatchSize(size = 30)
     @OrderBy("questionOrder ASC")
     @Builder.Default
     private List<InterviewQuestionEntity> questions = new ArrayList<>();
 
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.BatchSize(size = 30)
     @Builder.Default
     private List<InterviewAnswerEntity> answers = new ArrayList<>();
 

@@ -27,8 +27,13 @@ public class CompanyServiceImpl implements CompanyService {
     @Override
     @Transactional(readOnly = true)
     public List<CompanyDto> getAllCompanies() {
-        return companyRepository.findByActiveTrueOrderByNameAsc()
-                .stream()
+        List<CompanyEntity> companies = companyRepository.findByActiveTrueOrderByNameAsc();
+        for (CompanyEntity c : companies) {
+            if (c.getRoles() != null) c.getRoles().size();
+            if (c.getInterviewProcesses() != null) c.getInterviewProcesses().size();
+            if (c.getPrepTopics() != null) c.getPrepTopics().size();
+        }
+        return companies.stream()
                 .map(CompanyDto::fromEntity)
                 .toList();
     }
@@ -36,8 +41,11 @@ public class CompanyServiceImpl implements CompanyService {
     @Override
     @Transactional(readOnly = true)
     public CompanyDetailDto getCompanyBySlug(String slug) {
-        CompanyEntity company = companyRepository.findBySlugWithDetails(slug)
+        CompanyEntity company = companyRepository.findBySlug(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found with slug: " + slug));
+        if (company.getRoles() != null) company.getRoles().size();
+        if (company.getInterviewProcesses() != null) company.getInterviewProcesses().size();
+        if (company.getPrepTopics() != null) company.getPrepTopics().size();
         return CompanyDetailDto.fromEntity(company);
     }
 
@@ -55,7 +63,7 @@ public class CompanyServiceImpl implements CompanyService {
 
     @Override
     public UserCompanyPrepDto startUserPreparation(Long userId, String slug, StartPrepRequest request) {
-        CompanyEntity company = companyRepository.findBySlugWithDetails(slug)
+        CompanyEntity company = companyRepository.findBySlug(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found with slug: " + slug));
 
         CompanyRoleEntity role = null;

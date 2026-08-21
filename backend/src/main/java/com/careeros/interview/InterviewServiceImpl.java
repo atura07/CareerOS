@@ -100,14 +100,16 @@ public class InterviewServiceImpl implements InterviewService {
     @Override
     @Transactional(readOnly = true)
     public InterviewSessionDto getSessionById(Long userId, Long sessionId) {
-        InterviewSessionEntity session = sessionRepository.findByIdAndUserIdWithDetails(sessionId, userId)
+        InterviewSessionEntity session = sessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Interview session not found with id: " + sessionId));
+        if (session.getQuestions() != null) session.getQuestions().size();
+        if (session.getAnswers() != null) session.getAnswers().size();
         return InterviewSessionDto.fromEntity(session);
     }
 
     @Override
     public InterviewQuestionDto getNextQuestion(Long userId, Long sessionId) {
-        InterviewSessionEntity session = sessionRepository.findByIdAndUserIdWithDetails(sessionId, userId)
+        InterviewSessionEntity session = sessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Interview session not found with id: " + sessionId));
 
         List<InterviewQuestionEntity> questions = session.getQuestions();
@@ -184,7 +186,7 @@ public class InterviewServiceImpl implements InterviewService {
 
     @Override
     public InterviewSessionDto completeSession(Long userId, Long sessionId) {
-        InterviewSessionEntity session = sessionRepository.findByIdAndUserIdWithDetails(sessionId, userId)
+        InterviewSessionEntity session = sessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Interview session not found with id: " + sessionId));
 
         session.setStatus("COMPLETED");

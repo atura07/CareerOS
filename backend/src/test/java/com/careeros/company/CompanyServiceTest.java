@@ -67,7 +67,7 @@ class CompanyServiceTest {
 
     @Test
     void testGetCompanyBySlug() {
-        when(companyRepository.findBySlugWithDetails("google")).thenReturn(Optional.of(testCompany));
+        when(companyRepository.findBySlug("google")).thenReturn(Optional.of(testCompany));
 
         CompanyDetailDto result = companyService.getCompanyBySlug("google");
 
@@ -77,7 +77,7 @@ class CompanyServiceTest {
 
     @Test
     void testStartUserPreparation() {
-        when(companyRepository.findBySlugWithDetails("google")).thenReturn(Optional.of(testCompany));
+        when(companyRepository.findBySlug("google")).thenReturn(Optional.of(testCompany));
         when(userCompanyPrepRepository.findByUserIdAndCompanyId(1L, 1L)).thenReturn(Optional.empty());
         when(userCompanyPrepRepository.save(any(UserCompanyPreparationEntity.class)))
                 .thenAnswer(inv -> {

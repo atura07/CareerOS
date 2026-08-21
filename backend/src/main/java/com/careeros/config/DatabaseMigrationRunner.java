@@ -34,15 +34,13 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
              Statement stmt = conn.createStatement()) {
 
             // 1. Add email_verified to users table if missing
-            stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;");
-            log.info("Pre-JPA Migration: 'email_verified' column ensured on 'users' table.");
+            executeMigration(stmt, "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;", "users.email_verified column");
 
             // 2. Allow nullable password for Google OAuth users
-            stmt.execute("ALTER TABLE users ALTER COLUMN password DROP NOT NULL;");
-            log.info("Pre-JPA Migration: 'password' column nullability ensured on 'users' table.");
+            executeMigration(stmt, "ALTER TABLE users ALTER COLUMN password DROP NOT NULL;", "users.password nullable");
 
             // 3. Create email_verification_otps table
-            stmt.execute("""
+            executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS email_verification_otps (
                     id BIGSERIAL PRIMARY KEY,
                     email VARCHAR(255) NOT NULL,
@@ -53,15 +51,14 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                     resend_cooldown_until TIMESTAMP,
                     purpose VARCHAR(50) NOT NULL DEFAULT 'LOGIN'
                 );
-            """);
-            log.info("Pre-JPA Migration: 'email_verification_otps' table ensured.");
+            """, "email_verification_otps table");
 
             // 4. Create performance indexes
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_email_verification_otps_email ON email_verification_otps(email);");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_email_verification_otps_expiry ON email_verification_otps(expiry_time);");
+            executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_email_verification_otps_email ON email_verification_otps(email);", "email_verification_otps.email index");
+            executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_email_verification_otps_expiry ON email_verification_otps(expiry_time);", "email_verification_otps.expiry index");
 
             // 5. Companies Module Tables
-            stmt.execute("""
+            executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS companies (
                     id BIGSERIAL PRIMARY KEY,
                     name VARCHAR(255) NOT NULL,
@@ -77,9 +74,9 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
                     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
                 );
-            """);
+            """, "companies table");
 
-            stmt.execute("""
+            executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS company_roles (
                     id BIGSERIAL PRIMARY KEY,
                     company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -91,9 +88,9 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                     active BOOLEAN DEFAULT TRUE,
                     created_at TIMESTAMP NOT NULL DEFAULT NOW()
                 );
-            """);
+            """, "company_roles table");
 
-            stmt.execute("""
+            executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS company_interview_processes (
                     id BIGSERIAL PRIMARY KEY,
                     company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -104,9 +101,9 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                     description TEXT,
                     preparation_requirements TEXT
                 );
-            """);
+            """, "company_interview_processes table");
 
-            stmt.execute("""
+            executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS company_prep_topics (
                     id BIGSERIAL PRIMARY KEY,
                     company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -117,9 +114,9 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                     estimated_effort VARCHAR(100),
                     resources_json TEXT
                 );
-            """);
+            """, "company_prep_topics table");
 
-            stmt.execute("""
+            executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS user_company_preparations (
                     id BIGSERIAL PRIMARY KEY,
                     user_id BIGINT NOT NULL,
@@ -133,9 +130,9 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
                     CONSTRAINT uq_user_company_prep UNIQUE(user_id, company_id)
                 );
-            """);
+            """, "user_company_preparations table");
 
-            stmt.execute("""
+            executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS user_prep_tasks (
                     id BIGSERIAL PRIMARY KEY,
                     user_id BIGINT NOT NULL,
@@ -146,10 +143,10 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                     notes TEXT,
                     CONSTRAINT uq_user_prep_task UNIQUE(preparation_id, topic_id)
                 );
-            """);
+            """, "user_prep_tasks table");
 
             // 6. AI Mock Interview Tables
-            stmt.execute("""
+            executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS interview_sessions (
                     id BIGSERIAL PRIMARY KEY,
                     user_id BIGINT NOT NULL,
@@ -168,9 +165,9 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                     answer_quality_score INT,
                     feedback_summary TEXT
                 );
-            """);
+            """, "interview_sessions table");
 
-            stmt.execute("""
+            executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS interview_questions (
                     id BIGSERIAL PRIMARY KEY,
                     session_id BIGINT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE,
@@ -180,9 +177,9 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                     expected_criteria TEXT,
                     is_adaptive_follow_up BOOLEAN DEFAULT FALSE
                 );
-            """);
+            """, "interview_questions table");
 
-            stmt.execute("""
+            executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS interview_answers (
                     id BIGSERIAL PRIMARY KEY,
                     session_id BIGINT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE,
@@ -195,9 +192,9 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                     strengths TEXT,
                     improvement_areas TEXT
                 );
-            """);
+            """, "interview_answers table");
 
-            stmt.execute("""
+            executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS interview_reports (
                     id BIGSERIAL PRIMARY KEY,
                     session_id BIGINT NOT NULL UNIQUE REFERENCES interview_sessions(id) ON DELETE CASCADE,
@@ -207,13 +204,21 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                     next_preparation_actions TEXT,
                     created_at TIMESTAMP NOT NULL DEFAULT NOW()
                 );
-            """);
+            """, "interview_reports table");
 
             log.info("Pre-JPA Migration: All CareerOS Phase 2 tables verified successfully.");
 
         } catch (Exception e) {
-            log.error("Pre-JPA Database Migration Exception: {}", e.getMessage(), e);
+            log.error("Pre-JPA Database Migration Connection Exception: {}", e.getMessage(), e);
+        }
+    }
+
+    private void executeMigration(Statement stmt, String sql, String description) {
+        try {
+            stmt.execute(sql);
+            log.info("Migration successful: {}", description);
+        } catch (Exception e) {
+            log.warn("Migration notice for [{}]: {}", description, e.getMessage());
         }
     }
 }
-

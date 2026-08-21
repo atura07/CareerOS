@@ -59,15 +59,18 @@ public class CompanyEntity {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.BatchSize(size = 30)
     @Builder.Default
     private List<CompanyRoleEntity> roles = new ArrayList<>();
 
     @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.BatchSize(size = 30)
     @OrderBy("roundNumber ASC")
     @Builder.Default
     private List<InterviewProcessEntity> interviewProcesses = new ArrayList<>();
 
     @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.BatchSize(size = 30)
     @Builder.Default
     private List<CompanyPreparationTopicEntity> prepTopics = new ArrayList<>();
 
