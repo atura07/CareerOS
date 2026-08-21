@@ -9,7 +9,7 @@ export function SkillRadarChart({ skills }: SkillRadarChartProps) {
   const size = 260
   const cx = size / 2
   const cy = size / 2
-  const radius = 92
+  const radius = 90
 
   const points = (values: number[]) =>
     values
@@ -25,8 +25,8 @@ export function SkillRadarChart({ skills }: SkillRadarChartProps) {
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5 backdrop-blur">
       <h3 className="mb-2 text-sm font-semibold text-white/90">Skill Radar</h3>
-      <div className="relative mx-auto w-full max-w-[300px]">
-        <svg viewBox={`0 0 ${size} ${size}`} className="w-full">
+      <div className="relative mx-auto w-full max-w-[280px] aspect-square">
+        <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full">
           {/* Grid rings */}
           {gridLevels.map((level) => (
             <polygon
@@ -83,19 +83,19 @@ export function SkillRadarChart({ skills }: SkillRadarChartProps) {
         {/* Labels */}
         {skills.map((s, i) => {
           const angle = (Math.PI * 2 * i) / skills.length - Math.PI / 2
-          const r = radius + 22
+          const r = radius + 24
           const x = cx + r * Math.cos(angle)
           const y = cy + r * Math.sin(angle)
           return (
             <div
               key={s.skill}
-              className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
-              style={{ left: x, top: y }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none"
+              style={{ left: `${(x / size) * 100}%`, top: `${(y / size) * 100}%` }}
             >
-              <p className="text-[11px] font-medium text-white/70">
+              <p className="text-[10px] sm:text-[11px] font-medium text-white/70 whitespace-nowrap">
                 {s.skill}
               </p>
-              <p className="text-[10px] text-white/40">{s.value}</p>
+              <p className="text-[9px] sm:text-[10px] text-white/40">{s.value}</p>
             </div>
           )
         })}

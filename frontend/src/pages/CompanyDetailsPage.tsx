@@ -161,13 +161,13 @@ export function CompanyDetailsPage() {
         className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 backdrop-blur-xl sm:p-8"
       >
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-4 sm:gap-5">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/30 to-indigo-500/20 text-2xl font-bold text-blue-400 ring-1 ring-blue-500/30">
+          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5 min-w-0">
+            <div className="flex h-14 w-14 sm:h-16 sm:w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/30 to-indigo-500/20 text-xl sm:text-2xl font-bold text-blue-400 ring-1 ring-blue-500/30">
               {company.logoUrl || company.name.slice(0, 2).toUpperCase()}
             </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-bold tracking-tight text-white/95 sm:text-3xl">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+                <h1 className="text-xl font-bold tracking-tight text-white/95 sm:text-2xl lg:text-3xl">
                   {company.name}
                 </h1>
                 <span
@@ -183,16 +183,16 @@ export function CompanyDetailsPage() {
                   </span>
                 )}
               </div>
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/60">
+              <p className="mt-2 max-w-3xl text-xs sm:text-sm leading-relaxed text-white/60">
                 {company.description}
               </p>
-              <div className="mt-4 flex flex-wrap items-center gap-5 text-xs text-white/50">
+              <div className="mt-4 flex flex-wrap items-center gap-4 sm:gap-5 text-xs text-white/50">
                 <span className="flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-blue-400" />
+                  <MapPin className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                   {company.location || 'Multiple Hubs'}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <Coins className="h-3.5 w-3.5 text-emerald-400" />
+                  <Coins className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                   {company.packageInfo || 'Competitive Compensation'}
                 </span>
                 {company.website && (
@@ -210,10 +210,10 @@ export function CompanyDetailsPage() {
           </div>
 
           {/* Quick CTA Actions */}
-          <div className="flex shrink-0 flex-col gap-2.5 sm:flex-row md:flex-col">
+          <div className="flex shrink-0 flex-col gap-2.5 sm:flex-row md:flex-col w-full sm:w-auto">
             <Link
               to={`/dashboard/interview?company=${company.id}&name=${encodeURIComponent(company.name)}`}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 px-5 py-3 text-xs font-bold text-white shadow-lg shadow-blue-500/20 transition-all duration-300 hover:scale-[1.02] hover:shadow-blue-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 px-5 py-3 text-xs font-bold text-white shadow-lg shadow-blue-500/20 transition-all duration-300 hover:scale-[1.02] hover:shadow-blue-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
             >
               <Mic className="h-4 w-4" /> Start AI Mock Interview
             </Link>
