@@ -37,8 +37,9 @@ public class User implements UserDetails {
     private Role role;
 
     @Builder.Default
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean emailVerified = false;
+
 
     @Column(updatable = false)
     private LocalDateTime createdAt;
