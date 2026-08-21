@@ -30,6 +30,9 @@ public class InterviewSessionDto {
     private Integer technicalScore;
     private Integer communicationScore;
     private Integer answerQualityScore;
+    private Integer problemSolvingScore;
+    private Integer projectScore;
+    private String currentStage;
     private String feedbackSummary;
     private List<InterviewQuestionDto> questions;
     private InterviewReportDto report;
@@ -56,6 +59,9 @@ public class InterviewSessionDto {
                 .technicalScore(s.getTechnicalScore())
                 .communicationScore(s.getCommunicationScore())
                 .answerQualityScore(s.getAnswerQualityScore())
+                .problemSolvingScore(s.getProblemSolvingScore())
+                .projectScore(s.getProjectScore())
+                .currentStage(s.getCurrentStage())
                 .feedbackSummary(s.getFeedbackSummary())
                 .questions(questionDtos)
                 .report(s.getReport() != null ? InterviewReportDto.fromEntity(s.getReport()) : null)

@@ -206,6 +206,18 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                 );
             """, "interview_reports table");
 
+            // 7. Ensure new conversational columns
+            executeMigration(stmt, "ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS problem_solving_score INT;", "interview_sessions.problem_solving_score");
+            executeMigration(stmt, "ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS project_score INT;", "interview_sessions.project_score");
+            executeMigration(stmt, "ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS current_stage VARCHAR(50) DEFAULT 'INTRODUCTION';", "interview_sessions.current_stage");
+
+            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS questions_answered_well TEXT;", "interview_reports.questions_answered_well");
+            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS questions_needing_improvement TEXT;", "interview_reports.questions_needing_improvement");
+            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS detailed_feedback TEXT;", "interview_reports.detailed_feedback");
+            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS recommended_dsa_topics TEXT;", "interview_reports.recommended_dsa_topics");
+            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS interview_readiness VARCHAR(50);", "interview_reports.interview_readiness");
+            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS personalized_message TEXT;", "interview_reports.personalized_message");
+
             log.info("Pre-JPA Migration: All CareerOS Phase 2 tables verified successfully.");
 
         } catch (Exception e) {

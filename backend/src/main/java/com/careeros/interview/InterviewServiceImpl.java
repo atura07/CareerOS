@@ -4,6 +4,10 @@ import com.careeros.company.CompanyEntity;
 import com.careeros.company.CompanyRepository;
 import com.careeros.exception.ResourceNotFoundException;
 import com.careeros.interview.dto.*;
+import com.careeros.interview.openai.OpenAIInterviewService;
+import com.careeros.user.User;
+import com.careeros.user.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,10 +28,14 @@ public class InterviewServiceImpl implements InterviewService {
     private final InterviewAnswerRepository answerRepository;
     private final InterviewReportRepository reportRepository;
     private final CompanyRepository companyRepository;
-    private final InterviewAiService aiService;
+    private final UserRepository userRepository;
+    private final OpenAIInterviewService openAIService;
+    private final ObjectMapper objectMapper;
 
     @Override
     public InterviewSessionDto createSession(Long userId, CreateSessionRequest request) {
+        log.info("[INTERVIEW] Creating conversational mock interview session for userId={}", userId);
+
         CompanyEntity company = null;
         String compName = request.getCompanyName();
 
@@ -36,6 +44,13 @@ public class InterviewServiceImpl implements InterviewService {
             if (company != null) {
                 compName = company.getName();
             }
+        }
+
+        String candidateName = "Candidate";
+        if (userId != null) {
+            candidateName = userRepository.findById(userId)
+                    .map(User::getFullName)
+                    .orElse("Candidate");
         }
 
         String type = (request.getInterviewType() != null && !request.getInterviewType().isBlank())
@@ -58,6 +73,7 @@ public class InterviewServiceImpl implements InterviewService {
                 .interviewType(type)
                 .difficulty(difficulty)
                 .status("IN_PROGRESS")
+                .currentStage("INTRODUCTION")
                 .startedAt(LocalDateTime.now())
                 .durationMinutes(duration)
                 .questions(new ArrayList<>())
@@ -66,24 +82,28 @@ public class InterviewServiceImpl implements InterviewService {
 
         session = sessionRepository.save(session);
 
-        // Generate initial questions from AI Engine
-        List<InterviewAiService.QuestionPlan> plans = aiService.generateInitialQuestions(
-                compName, request.getRoleTitle(), type, difficulty
+        // Generate opening conversational question via OpenAI
+        OpenAIInterviewService.StartQuestionResult startResult = openAIService.generateStartQuestion(
+                candidateName,
+                compName,
+                request.getRoleTitle(),
+                type,
+                difficulty
         );
 
-        int order = 1;
-        for (InterviewAiService.QuestionPlan plan : plans) {
-            InterviewQuestionEntity q = InterviewQuestionEntity.builder()
-                    .session(session)
-                    .questionOrder(order++)
-                    .questionText(plan.questionText())
-                    .category(plan.category())
-                    .expectedCriteria(plan.expectedCriteria())
-                    .isAdaptiveFollowUp(plan.isAdaptive())
-                    .build();
-            questionRepository.save(q);
-            session.getQuestions().add(q);
-        }
+        InterviewQuestionEntity initialQuestion = InterviewQuestionEntity.builder()
+                .session(session)
+                .questionOrder(1)
+                .questionText(startResult.question())
+                .category(startResult.topic())
+                .expectedCriteria(startResult.reason())
+                .isAdaptiveFollowUp(false)
+                .build();
+
+        initialQuestion = questionRepository.save(initialQuestion);
+        session.getQuestions().add(initialQuestion);
+
+        log.info("[INTERVIEW] Initialized session id={} with opening question: {}", session.getId(), initialQuestion.getQuestionText());
 
         return InterviewSessionDto.fromEntity(session);
     }
@@ -118,101 +138,206 @@ public class InterviewServiceImpl implements InterviewService {
                 return InterviewQuestionDto.fromEntity(q);
             }
         }
-
-        // If all current questions answered but under question cap (e.g. 5), generate adaptive follow-up
-        if (questions.size() < 5) {
-            InterviewQuestionEntity lastQ = questions.get(questions.size() - 1);
-            String lastTranscript = (lastQ.getAnswer() != null) ? lastQ.getAnswer().getTranscript() : "";
-
-            InterviewAiService.QuestionPlan followUp = aiService.generateAdaptiveFollowUp(
-                    lastQ.getQuestionText(), lastTranscript, session.getInterviewType(), session.getDifficulty(), questions.size() + 1
-            );
-
-            InterviewQuestionEntity newQ = InterviewQuestionEntity.builder()
-                    .session(session)
-                    .questionOrder(questions.size() + 1)
-                    .questionText(followUp.questionText())
-                    .category(followUp.category())
-                    .expectedCriteria(followUp.expectedCriteria())
-                    .isAdaptiveFollowUp(true)
-                    .build();
-
-            newQ = questionRepository.save(newQ);
-            session.getQuestions().add(newQ);
-            return InterviewQuestionDto.fromEntity(newQ);
-        }
-
-        return null; // All questions completed
+        return null;
     }
 
     @Override
-    public InterviewAnswerDto submitAnswer(Long userId, Long sessionId, Long questionId, SubmitAnswerRequest request) {
+    public SubmitAnswerResponse submitAnswer(Long userId, Long sessionId, Long questionId, SubmitAnswerRequest request) {
+        log.info("[INTERVIEW] Submitting answer for sessionId={}, questionId={}", sessionId, questionId);
+
         InterviewSessionEntity session = sessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Interview session not found with id: " + sessionId));
 
-        InterviewQuestionEntity question = questionRepository.findById(questionId)
+        InterviewQuestionEntity currentQuestion = questionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + questionId));
 
-        if (!question.getSession().getId().equals(session.getId())) {
+        if (!currentQuestion.getSession().getId().equals(session.getId())) {
             throw new IllegalArgumentException("Question does not belong to session");
         }
 
-        // Evaluate answer via AI Engine
-        InterviewAiService.AnswerEvaluation evaluation = aiService.evaluateAnswer(
-                question.getQuestionText(),
-                question.getExpectedCriteria(),
-                request.getTranscript(),
+        String candidateName = userRepository.findById(userId)
+                .map(User::getFullName)
+                .orElse("Candidate");
+
+        // Build complete conversation history up to this question
+        List<OpenAIInterviewService.ConversationTurn> history = new ArrayList<>();
+        if (session.getQuestions() != null) {
+            for (InterviewQuestionEntity q : session.getQuestions()) {
+                if (!q.getId().equals(questionId) && q.getAnswer() != null) {
+                    history.add(new OpenAIInterviewService.ConversationTurn(
+                            q.getQuestionText(),
+                            q.getAnswer().getTranscript(),
+                            q.getCategory(),
+                            q.getAnswer().getScore()
+                    ));
+                }
+            }
+        }
+
+        // Call OpenAI to evaluate candidate answer and generate the next dynamic follow-up question
+        OpenAIInterviewService.ConversationalResponse aiResponse = openAIService.evaluateAndGenerateNextQuestion(
+                candidateName,
+                session.getCompanyName(),
+                session.getRoleTitle(),
                 session.getInterviewType(),
-                session.getDifficulty()
+                session.getDifficulty(),
+                session.getCurrentStage(),
+                history,
+                currentQuestion.getQuestionText(),
+                request.getTranscript()
         );
 
+        OpenAIInterviewService.CandidateEvaluation eval = aiResponse.candidateAnswerEvaluation();
+        OpenAIInterviewService.InterviewState state = aiResponse.interviewState();
+        OpenAIInterviewService.NextQuestion nextQData = aiResponse.nextQuestion();
+
+        // Update session stage
+        if (state.currentStage() != null && !state.currentStage().isBlank()) {
+            session.setCurrentStage(state.currentStage());
+        }
+
+        // Save or update candidate answer
         InterviewAnswerEntity answer = answerRepository.findByQuestionId(questionId)
                 .orElseGet(() -> InterviewAnswerEntity.builder()
                         .session(session)
-                        .question(question)
+                        .question(currentQuestion)
                         .build());
 
         answer.setTranscript(request.getTranscript());
         answer.setAnswerDurationSeconds(request.getAnswerDurationSeconds());
-        answer.setScore(evaluation.score());
-        answer.setAiEvaluation(evaluation.evaluation());
-        answer.setStrengths(evaluation.strengths());
-        answer.setImprovementAreas(evaluation.improvementAreas());
-        answer.setTimestamp(LocalDateTime.now());
+        answer.setScore(eval.score());
+        answer.setAiEvaluation(eval.briefFeedback());
 
+        try {
+            answer.setStrengths(objectMapper.writeValueAsString(eval.strengths()));
+            answer.setImprovementAreas(objectMapper.writeValueAsString(eval.weaknesses()));
+        } catch (Exception e) {
+            answer.setStrengths("[]");
+            answer.setImprovementAreas("[]");
+        }
+        answer.setTimestamp(LocalDateTime.now());
         answer = answerRepository.save(answer);
-        return InterviewAnswerDto.fromEntity(answer);
+        currentQuestion.setAnswer(answer);
+
+        // Dynamically create and persist next question if interview should continue (capped at 10 turns max)
+        InterviewQuestionDto nextQuestionDto = null;
+        int currentQuestionCount = session.getQuestions() != null ? session.getQuestions().size() : 1;
+
+        if (state.shouldContinue() && currentQuestionCount < 10) {
+            InterviewQuestionEntity nextQuestionEntity = InterviewQuestionEntity.builder()
+                    .session(session)
+                    .questionOrder(currentQuestionCount + 1)
+                    .questionText(nextQData.question())
+                    .category(nextQData.topic())
+                    .expectedCriteria(nextQData.reason())
+                    .isAdaptiveFollowUp(true)
+                    .build();
+
+            nextQuestionEntity = questionRepository.save(nextQuestionEntity);
+            session.getQuestions().add(nextQuestionEntity);
+            nextQuestionDto = InterviewQuestionDto.fromEntity(nextQuestionEntity);
+            log.info("[INTERVIEW] Generated next dynamic question #{} in stage [{}]: {}",
+                    nextQuestionEntity.getQuestionOrder(), session.getCurrentStage(), nextQuestionEntity.getQuestionText());
+        } else {
+            log.info("[INTERVIEW] Interview stage completed or question limit reached.");
+        }
+
+        sessionRepository.save(session);
+
+        return SubmitAnswerResponse.builder()
+                .answer(InterviewAnswerDto.fromEntity(answer))
+                .evaluation(SubmitAnswerResponse.CandidateEvaluationDto.builder()
+                        .score(eval.score())
+                        .technicalAccuracy(eval.technicalAccuracy())
+                        .clarity(eval.clarity())
+                        .communication(eval.communication())
+                        .completeness(eval.completeness())
+                        .strengths(eval.strengths())
+                        .weaknesses(eval.weaknesses())
+                        .briefFeedback(eval.briefFeedback())
+                        .build())
+                .interviewState(SubmitAnswerResponse.InterviewStateDto.builder()
+                        .currentStage(session.getCurrentStage())
+                        .difficulty(session.getDifficulty())
+                        .shouldContinue(state.shouldContinue() && currentQuestionCount < 10)
+                        .build())
+                .nextQuestion(nextQuestionDto)
+                .build();
     }
 
     @Override
     public InterviewSessionDto completeSession(Long userId, Long sessionId) {
+        log.info("[INTERVIEW] Completing session id={} for userId={}", sessionId, userId);
+
         InterviewSessionEntity session = sessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Interview session not found with id: " + sessionId));
 
         session.setStatus("COMPLETED");
+        session.setCurrentStage("COMPLETE");
         session.setEndedAt(LocalDateTime.now());
 
-        // Synthesize final comprehensive report
-        InterviewAiService.ReportSynthesis synthesis = aiService.synthesizeReport(session);
+        String candidateName = userRepository.findById(userId)
+                .map(User::getFullName)
+                .orElse("Candidate");
 
-        session.setOverallScore(synthesis.overallScore());
-        session.setTechnicalScore(synthesis.technicalScore());
-        session.setCommunicationScore(synthesis.communicationScore());
-        session.setAnswerQualityScore(synthesis.answerQualityScore());
-        session.setFeedbackSummary(synthesis.summary());
+        // Build full conversation history for comprehensive OpenAI report synthesis
+        List<OpenAIInterviewService.ConversationTurn> history = new ArrayList<>();
+        if (session.getQuestions() != null) {
+            for (InterviewQuestionEntity q : session.getQuestions()) {
+                if (q.getAnswer() != null) {
+                    history.add(new OpenAIInterviewService.ConversationTurn(
+                            q.getQuestionText(),
+                            q.getAnswer().getTranscript(),
+                            q.getCategory(),
+                            q.getAnswer().getScore()
+                    ));
+                }
+            }
+        }
+
+        // Synthesize full report with OpenAI
+        OpenAIInterviewService.FinalReportResult reportResult = openAIService.synthesizeFinalReport(
+                candidateName,
+                session.getCompanyName(),
+                session.getRoleTitle(),
+                session.getInterviewType(),
+                session.getDifficulty(),
+                history
+        );
+
+        session.setOverallScore(reportResult.overallScore());
+        session.setTechnicalScore(reportResult.technicalScore());
+        session.setCommunicationScore(reportResult.communicationScore());
+        session.setProblemSolvingScore(reportResult.problemSolvingScore());
+        session.setProjectScore(reportResult.projectScore());
+        session.setAnswerQualityScore((reportResult.technicalScore() + reportResult.communicationScore()) / 2);
+        session.setFeedbackSummary(reportResult.personalizedMessage());
 
         final InterviewSessionEntity targetSession = session;
         InterviewReportEntity report = reportRepository.findBySessionId(sessionId)
                 .orElseGet(() -> InterviewReportEntity.builder().session(targetSession).build());
 
-        report.setOverallStrengths(synthesis.strengthsJson());
-        report.setOverallWeaknesses(synthesis.weaknessesJson());
-        report.setRecommendations(synthesis.recommendationsJson());
-        report.setNextPreparationActions(synthesis.nextActionsJson());
+        try {
+            report.setOverallStrengths(objectMapper.writeValueAsString(reportResult.strongestSkills()));
+            report.setOverallWeaknesses(objectMapper.writeValueAsString(reportResult.weakestAreas()));
+            report.setQuestionsAnsweredWell(objectMapper.writeValueAsString(reportResult.questionsAnsweredWell()));
+            report.setQuestionsNeedingImprovement(objectMapper.writeValueAsString(reportResult.questionsNeedingImprovement()));
+            report.setDetailedFeedback(reportResult.detailedFeedback());
+            report.setRecommendations(objectMapper.writeValueAsString(reportResult.top5TopicsToStudyNext()));
+            report.setNextPreparationActions(objectMapper.writeValueAsString(reportResult.top5TopicsToStudyNext()));
+            report.setRecommendedDsaTopics(objectMapper.writeValueAsString(reportResult.recommendedDsaTopics()));
+            report.setInterviewReadiness(reportResult.interviewReadiness());
+            report.setPersonalizedMessage(reportResult.personalizedMessage());
+        } catch (Exception e) {
+            log.warn("[INTERVIEW] Failed to serialize report JSON lists: {}", e.getMessage());
+        }
 
         report = reportRepository.save(report);
         session.setReport(report);
         session = sessionRepository.save(session);
+
+        log.info("[INTERVIEW] Session id={} completed. Overall Score: {}/100, Readiness: {}",
+                session.getId(), session.getOverallScore(), report.getInterviewReadiness());
 
         return InterviewSessionDto.fromEntity(session);
     }

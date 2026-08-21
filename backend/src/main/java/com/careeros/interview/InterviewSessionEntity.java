@@ -66,6 +66,16 @@ public class InterviewSessionEntity {
     @Column(name = "answer_quality_score")
     private Integer answerQualityScore;
 
+    @Column(name = "problem_solving_score")
+    private Integer problemSolvingScore;
+
+    @Column(name = "project_score")
+    private Integer projectScore;
+
+    @Column(name = "current_stage", length = 50)
+    @Builder.Default
+    private String currentStage = "INTRODUCTION";
+
     @Column(name = "feedback_summary", columnDefinition = "TEXT")
     private String feedbackSummary;
 

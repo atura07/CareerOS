@@ -49,7 +49,7 @@ public class InterviewController {
     }
 
     @PostMapping("/{sessionId}/questions/{questionId}/answer")
-    public ResponseEntity<InterviewAnswerDto> submitAnswer(
+    public ResponseEntity<SubmitAnswerResponse> submitAnswer(
             @PathVariable Long sessionId,
             @PathVariable Long questionId,
             @RequestBody SubmitAnswerRequest request,

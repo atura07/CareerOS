@@ -14,7 +14,7 @@ public interface InterviewService {
 
     InterviewQuestionDto getNextQuestion(Long userId, Long sessionId);
 
-    InterviewAnswerDto submitAnswer(Long userId, Long sessionId, Long questionId, SubmitAnswerRequest request);
+    SubmitAnswerResponse submitAnswer(Long userId, Long sessionId, Long questionId, SubmitAnswerRequest request);
 
     InterviewSessionDto completeSession(Long userId, Long sessionId);
 

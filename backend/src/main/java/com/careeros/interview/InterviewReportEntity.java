@@ -30,11 +30,29 @@ public class InterviewReportEntity {
     @Column(name = "overall_weaknesses", columnDefinition = "TEXT")
     private String overallWeaknesses; // JSON list
 
+    @Column(name = "questions_answered_well", columnDefinition = "TEXT")
+    private String questionsAnsweredWell; // JSON list
+
+    @Column(name = "questions_needing_improvement", columnDefinition = "TEXT")
+    private String questionsNeedingImprovement; // JSON list
+
+    @Column(name = "detailed_feedback", columnDefinition = "TEXT")
+    private String detailedFeedback;
+
     @Column(columnDefinition = "TEXT")
     private String recommendations; // JSON list
 
     @Column(name = "next_preparation_actions", columnDefinition = "TEXT")
     private String nextPreparationActions; // JSON list
+
+    @Column(name = "recommended_dsa_topics", columnDefinition = "TEXT")
+    private String recommendedDsaTopics; // JSON list
+
+    @Column(name = "interview_readiness", length = 50)
+    private String interviewReadiness;
+
+    @Column(name = "personalized_message", columnDefinition = "TEXT")
+    private String personalizedMessage;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

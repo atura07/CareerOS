@@ -2,6 +2,7 @@ import { httpClient } from './httpClient'
 
 export type InterviewType = 'HR' | 'TECHNICAL' | 'SYSTEM_DESIGN' | 'DSA' | 'BEHAVIORAL' | 'MIXED'
 export type InterviewDifficulty = 'Easy' | 'Medium' | 'Hard'
+export type InterviewStage = 'INTRODUCTION' | 'PROJECT' | 'TECHNICAL' | 'DSA' | 'BEHAVIORAL' | 'COMPLETE'
 
 export interface CreateSessionPayload {
   companyId?: number
@@ -41,13 +42,43 @@ export interface InterviewAnswer {
   improvementAreas?: string
 }
 
+export interface CandidateEvaluation {
+  score: number
+  technicalAccuracy: number
+  clarity: number
+  communication: number
+  completeness: number
+  strengths: string[]
+  weaknesses: string[]
+  briefFeedback: string
+}
+
+export interface InterviewState {
+  currentStage: string
+  difficulty: string
+  shouldContinue: boolean
+}
+
+export interface SubmitAnswerResponse {
+  answer: InterviewAnswer
+  evaluation: CandidateEvaluation
+  interviewState: InterviewState
+  nextQuestion: InterviewQuestion | null
+}
+
 export interface InterviewReport {
   id: number
   sessionId: number
   overallStrengths?: string // JSON array
   overallWeaknesses?: string // JSON array
+  questionsAnsweredWell?: string // JSON array
+  questionsNeedingImprovement?: string // JSON array
+  detailedFeedback?: string
   recommendations?: string // JSON array
   nextPreparationActions?: string // JSON array
+  recommendedDsaTopics?: string // JSON array
+  interviewReadiness?: string
+  personalizedMessage?: string
   createdAt: string
 }
 
@@ -61,6 +92,7 @@ export interface InterviewSession {
   interviewType: InterviewType
   difficulty: InterviewDifficulty
   status: 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED'
+  currentStage?: string
   startedAt: string
   endedAt?: string
   durationMinutes: number
@@ -68,6 +100,8 @@ export interface InterviewSession {
   technicalScore?: number
   communicationScore?: number
   answerQualityScore?: number
+  problemSolvingScore?: number
+  projectScore?: number
   feedbackSummary?: string
   questions: InterviewQuestion[]
   report?: InterviewReport
@@ -115,8 +149,8 @@ export const submitInterviewAnswer = async (
   sessionId: number,
   questionId: number,
   payload: SubmitAnswerPayload
-): Promise<InterviewAnswer> => {
-  const res = await httpClient.post<InterviewAnswer>(
+): Promise<SubmitAnswerResponse> => {
+  const res = await httpClient.post<SubmitAnswerResponse>(
     `/v1/interviews/${sessionId}/questions/${questionId}/answer`,
     payload
   )
