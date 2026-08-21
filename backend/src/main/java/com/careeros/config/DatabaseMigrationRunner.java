@@ -1,43 +1,48 @@
 package com.careeros.config;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.core.annotation.Order;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.stereotype.Component;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.Statement;
+
 /**
- * Executes safe, idempotent schema migrations on startup before business logic executes.
- * Ensures the production database matches the current User and OTP entities.
+ * Runs idempotent database migrations directly on the DataSource before Hibernate's
+ * EntityManagerFactory or any JPA repositories are initialized.
  */
 @Slf4j
 @Component
-@Order(1)
-@RequiredArgsConstructor
-public class DatabaseMigrationRunner implements ApplicationRunner {
+public class DatabaseMigrationRunner implements BeanPostProcessor {
 
-    private final JdbcTemplate jdbcTemplate;
+    private boolean migrated = false;
 
     @Override
-    public void run(ApplicationArguments args) {
-        log.info("Starting safe database migrations for authentication and OTP schema...");
-        try {
-            // 1. Ensure `email_verified` column exists on `users` table
-            jdbcTemplate.execute(
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;"
-            );
-            log.info("Migration: 'email_verified' column verified on 'users' table.");
+    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        if (bean instanceof DataSource dataSource && !migrated) {
+            migrated = true;
+            runMigration(dataSource);
+        }
+        return bean;
+    }
 
-            // 2. Allow nullable passwords on `users` table for Google OAuth users
-            jdbcTemplate.execute(
-                    "ALTER TABLE users ALTER COLUMN password DROP NOT NULL;"
-            );
-            log.info("Migration: 'password' column nullability verified on 'users' table.");
+    private void runMigration(DataSource dataSource) {
+        log.info("Executing pre-JPA database migrations on DataSource...");
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
 
-            // 3. Ensure `email_verification_otps` table exists
-            jdbcTemplate.execute("""
+            // 1. Add email_verified to users table if missing
+            stmt.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;");
+            log.info("Pre-JPA Migration: 'email_verified' column ensured on 'users' table.");
+
+            // 2. Allow nullable password for Google OAuth users
+            stmt.execute("ALTER TABLE users ALTER COLUMN password DROP NOT NULL;");
+            log.info("Pre-JPA Migration: 'password' column nullability ensured on 'users' table.");
+
+            // 3. Create email_verification_otps table
+            stmt.execute("""
                 CREATE TABLE IF NOT EXISTS email_verification_otps (
                     id BIGSERIAL PRIMARY KEY,
                     email VARCHAR(255) NOT NULL,
@@ -49,20 +54,16 @@ public class DatabaseMigrationRunner implements ApplicationRunner {
                     purpose VARCHAR(50) NOT NULL DEFAULT 'LOGIN'
                 );
             """);
-            log.info("Migration: 'email_verification_otps' table verified.");
+            log.info("Pre-JPA Migration: 'email_verification_otps' table ensured.");
 
-            // 4. Create indexes for efficient OTP lookup and expiry cleanup
-            jdbcTemplate.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_email_verification_otps_email ON email_verification_otps(email);"
-            );
-            jdbcTemplate.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_email_verification_otps_expiry ON email_verification_otps(expiry_time);"
-            );
-            log.info("Migration: OTP indexes verified.");
+            // 4. Create performance indexes
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_email_verification_otps_email ON email_verification_otps(email);");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_email_verification_otps_expiry ON email_verification_otps(expiry_time);");
+            log.info("Pre-JPA Migration: All indexes verified successfully.");
 
-            log.info("Safe database migrations completed successfully.");
         } catch (Exception e) {
-            log.warn("Database migration completed with note: {}", e.getMessage());
+            log.error("Pre-JPA Database Migration Exception: {}", e.getMessage(), e);
         }
     }
 }
+
