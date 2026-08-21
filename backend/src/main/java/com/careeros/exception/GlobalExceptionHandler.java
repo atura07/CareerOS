@@ -45,8 +45,20 @@ public class GlobalExceptionHandler {
 
         Map<String, String> body = new HashMap<>();
         body.put("error", ex.getMessage());
+        body.put("message", ex.getMessage());
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> handleIllegalState(
+            IllegalStateException ex) {
+
+        Map<String, String> body = new HashMap<>();
+        body.put("error", ex.getMessage());
+        body.put("message", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
     @ExceptionHandler(EmailNotVerifiedException.class)
