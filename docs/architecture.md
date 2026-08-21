@@ -318,7 +318,7 @@ Controller → Service → Repository → Entity (JPA)
 | `stored_file_name` | VARCHAR(255) | UUID-based stored filename |
 | `file_size` | BIGINT | Size in bytes |
 | `file_type` | VARCHAR(10) | `pdf` or `docx` |
-| `extracted_text` | MEDIUMTEXT | Parsed text content |
+| `extracted_text` | TEXT | Parsed text content |
 | `upload_date` | DATETIME | Upload timestamp |
 
 ---

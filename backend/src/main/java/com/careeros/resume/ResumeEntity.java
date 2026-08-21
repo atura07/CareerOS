@@ -26,7 +26,7 @@ public class ResumeEntity {
     @Column(nullable = false)
     private String fileType; // "pdf" or "docx"
 
-    @Column(columnDefinition = "MEDIUMTEXT")
+    @Column(columnDefinition = "TEXT")
     private String extractedText;
 
     @Column(nullable = false)
