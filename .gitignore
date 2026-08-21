@@ -70,4 +70,6 @@ lerna-debug.log*
 *.tsbuildinfo
 coverage/
 .nyc_output/
+df_*.txt
+
 

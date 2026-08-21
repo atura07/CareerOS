@@ -1,6 +1,6 @@
 /**
  * Backend API endpoints.
- * Base URL is configured in httpClient.ts (http://localhost:8080/api)
+ * Base URL is configured in httpClient.ts via VITE_API_URL (e.g. https://careeros-en8x.onrender.com/api)
  */
 export const ENDPOINTS = {
   // Auth
