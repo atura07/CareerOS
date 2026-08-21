@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { CareerOSLogo } from '../../components/common/CareerOSLogo'
 
 interface AuthLayoutProps {
   children: ReactNode
@@ -22,9 +23,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
         className="group mb-8 flex items-center gap-2.5 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05070c]"
         aria-label="CareerOS Home"
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-400 to-indigo-400 text-[10px] font-bold text-white shadow-lg">
-          C
-        </div>
+        <CareerOSLogo size={32} className="shrink-0 drop-shadow-md" />
         <span className="text-lg font-semibold tracking-tight text-white/90">
           CareerOS
         </span>

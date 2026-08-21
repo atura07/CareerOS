@@ -17,6 +17,8 @@ BarChart3,
   ChevronLeft,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { CareerOSLogo } from '../common/CareerOSLogo'
+
 
 interface NavItem {
   label: string
@@ -52,9 +54,7 @@ export function Sidebar() {
           to="/dashboard"
           className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 rounded-lg"
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-400 to-indigo-400 text-[10px] font-bold text-white shadow-lg">
-            C
-          </div>
+          <CareerOSLogo size={30} className="shrink-0 drop-shadow-md" />
           {!collapsed && (
             <span className="text-sm font-semibold tracking-tight text-white/90">
               CareerOS

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { CareerOSLogo } from '../common/CareerOSLogo'
+
 
 export function HeroNavbar() {
   const [scrolled, setScrolled] = useState(false)
@@ -27,9 +29,9 @@ export function HeroNavbar() {
       >
         {/* Logo - left */}
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-500/30 to-indigo-500/20 ring-1 ring-white/10" />
+          <CareerOSLogo size={36} className="shrink-0 drop-shadow-md" />
           <div className="leading-tight">
-            <div className="text-sm font-semibold tracking-tight">CareerOS</div>
+            <div className="text-sm font-semibold tracking-tight text-white/95">CareerOS</div>
             <div className="text-[11px] text-white/60">AI Career Operating System</div>
           </div>
         </div>
