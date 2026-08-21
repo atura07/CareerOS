@@ -44,16 +44,24 @@ public class DashboardServiceImpl implements DashboardService {
     public DashboardSummaryDto getDashboardSummary(Long userId) {
         log.info("[DASHBOARD] Fetching real summary for userId={}", userId);
 
-        User user = userRepository.findById(userId).orElse(null);
-        String fullName = user != null && user.getFullName() != null ? user.getFullName() : "Candidate";
+        User user = null;
+        try {
+            user = userRepository.findById(userId).orElse(null);
+        } catch (Exception e) {
+            log.warn("[DASHBOARD] Failed to query user by id={}: {}", userId, e.getMessage());
+        }
+
+        String fullName = user != null && user.getFullName() != null && !user.getFullName().isBlank()
+                ? user.getFullName()
+                : "Candidate";
         String firstName = fullName.contains(" ") ? fullName.split(" ")[0] : fullName;
 
-        // 1. Fetch real entity data for the authenticated user
-        List<ResumeEntity> resumes = resumeRepository.findByUserIdOrderByUploadDateDesc(userId);
-        List<InterviewSessionEntity> sessions = interviewSessionRepository.findByUserIdOrderByStartedAtDesc(userId);
-        List<ApplicationEntity> applications = applicationRepository.findByUserIdOrderByLastUpdatedDesc(userId);
-        List<UserCompanyPreparationEntity> companyPreps = userCompanyPrepRepository.findByUserId(userId);
-        List<RoadmapEntity> roadmaps = roadmapRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        // 1. Fetch real entity data with individual try-catch blocks for maximum resilience
+        List<ResumeEntity> resumes = safeFetchResumes(userId);
+        List<InterviewSessionEntity> sessions = safeFetchInterviews(userId);
+        List<ApplicationEntity> applications = safeFetchApplications(userId);
+        List<UserCompanyPreparationEntity> companyPreps = safeFetchCompanyPreps(userId);
+        List<RoadmapEntity> roadmaps = safeFetchRoadmaps(userId);
 
         boolean hasResume = !resumes.isEmpty();
         ResumeEntity latestResume = hasResume ? resumes.get(0) : null;
@@ -71,29 +79,40 @@ public class DashboardServiceImpl implements DashboardService {
         }
 
         List<InterviewSessionEntity> completedSessions = sessions.stream()
-                .filter(s -> "COMPLETED".equalsIgnoreCase(s.getStatus()))
+                .filter(s -> s != null && "COMPLETED".equalsIgnoreCase(s.getStatus()))
                 .collect(Collectors.toList());
         boolean hasInterview = !completedSessions.isEmpty();
         InterviewSessionEntity latestCompletedInterview = hasInterview ? completedSessions.get(0) : null;
 
         boolean hasApplications = !applications.isEmpty();
         long activeAppsCount = applications.stream()
-                .filter(a -> !"Rejected".equalsIgnoreCase(a.getStatus()) && !"Offer".equalsIgnoreCase(a.getStatus()))
+                .filter(a -> a != null && a.getStatus() != null && !"Rejected".equalsIgnoreCase(a.getStatus()) && !"Offer".equalsIgnoreCase(a.getStatus()))
                 .count();
         long offersCount = applications.stream()
-                .filter(a -> "Offer".equalsIgnoreCase(a.getStatus()))
+                .filter(a -> a != null && "Offer".equalsIgnoreCase(a.getStatus()))
                 .count();
 
         boolean hasCompanyPrep = !companyPreps.isEmpty();
         int completedTasksTotal = 0;
         int tasksTotal = 0;
         for (UserCompanyPreparationEntity cp : companyPreps) {
-            if (cp.getTasks() != null && !cp.getTasks().isEmpty()) {
-                tasksTotal += cp.getTasks().size();
-                completedTasksTotal += (int) cp.getTasks().stream().filter(t -> "COMPLETED".equalsIgnoreCase(t.getStatus())).count();
-            } else if (cp.getProgressPercentage() != null && cp.getProgressPercentage() > 0) {
-                completedTasksTotal += 1;
-                tasksTotal += 1;
+            if (cp == null) continue;
+            try {
+                if (cp.getTasks() != null && !cp.getTasks().isEmpty()) {
+                    tasksTotal += cp.getTasks().size();
+                    completedTasksTotal += (int) cp.getTasks().stream()
+                            .filter(t -> t != null && "COMPLETED".equalsIgnoreCase(t.getStatus()))
+                            .count();
+                } else if (cp.getProgressPercentage() != null && cp.getProgressPercentage() > 0) {
+                    completedTasksTotal += 1;
+                    tasksTotal += 1;
+                }
+            } catch (Exception e) {
+                // Fallback to progressPercentage if lazy loading is not accessible
+                if (cp.getProgressPercentage() != null && cp.getProgressPercentage() > 0) {
+                    completedTasksTotal += 1;
+                    tasksTotal += 1;
+                }
             }
         }
 
@@ -151,6 +170,60 @@ public class DashboardServiceImpl implements DashboardService {
                 .profileCompletion(profileCompletion)
                 .consistency(consistency)
                 .build();
+    }
+
+    private List<ResumeEntity> safeFetchResumes(Long userId) {
+        try {
+            return resumeRepository.findByUserIdOrderByUploadDateDesc(userId);
+        } catch (Exception e) {
+            log.warn("[DASHBOARD] Error fetching resumes for userId={}: {}", userId, e.getMessage());
+            try {
+                return resumeRepository.findByUserId(userId);
+            } catch (Exception ignored) {
+                return Collections.emptyList();
+            }
+        }
+    }
+
+    private List<InterviewSessionEntity> safeFetchInterviews(Long userId) {
+        try {
+            return interviewSessionRepository.findByUserIdOrderByStartedAtDesc(userId);
+        } catch (Exception e) {
+            log.warn("[DASHBOARD] Error fetching interviews for userId={}: {}", userId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private List<ApplicationEntity> safeFetchApplications(Long userId) {
+        try {
+            return applicationRepository.findByUserIdOrderByLastUpdatedDesc(userId);
+        } catch (Exception e) {
+            log.warn("[DASHBOARD] Error fetching applications by lastUpdated for userId={}: {}", userId, e.getMessage());
+            try {
+                return applicationRepository.findByUserId(userId);
+            } catch (Exception ex) {
+                log.warn("[DASHBOARD] Error fetching applications by userId={}: {}", userId, ex.getMessage());
+                return Collections.emptyList();
+            }
+        }
+    }
+
+    private List<UserCompanyPreparationEntity> safeFetchCompanyPreps(Long userId) {
+        try {
+            return userCompanyPrepRepository.findByUserId(userId);
+        } catch (Exception e) {
+            log.warn("[DASHBOARD] Error fetching company preps for userId={}: {}", userId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private List<RoadmapEntity> safeFetchRoadmaps(Long userId) {
+        try {
+            return roadmapRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        } catch (Exception e) {
+            log.warn("[DASHBOARD] Error fetching roadmaps for userId={}: {}", userId, e.getMessage());
+            return Collections.emptyList();
+        }
     }
 
     private String determineTimeGreeting() {
@@ -259,7 +332,7 @@ public class DashboardServiceImpl implements DashboardService {
         if (!applications.isEmpty()) {
             appPts += Math.min(10.0, applications.size() * 3.0);
             long interviewStages = applications.stream()
-                    .filter(a -> a.getStatus() != null && (a.getStatus().contains("Interview") || a.getStatus().contains("OA") || a.getStatus().contains("Offer")))
+                    .filter(a -> a != null && a.getStatus() != null && (a.getStatus().contains("Interview") || a.getStatus().contains("OA") || a.getStatus().contains("Offer")))
                     .count();
             appPts += Math.min(10.0, interviewStages * 4.0);
         }
@@ -338,13 +411,14 @@ public class DashboardServiceImpl implements DashboardService {
                     .build();
         } else {
             String metric = atsScore != null ? ("ATS Score: " + atsScore + "/100") : "Resume Uploaded";
+            String fileName = latestResume.getOriginalFileName() != null ? latestResume.getOriginalFileName() : "Resume File";
             resumeCard = DashboardSummaryDto.CardStatus.builder()
                     .key("resume")
                     .title("Resume & ATS")
                     .state(atsScore != null ? "ANALYZED" : "UPLOADED")
                     .stateLabel(atsScore != null ? "Analyzed" : "Uploaded")
                     .primaryMetric(metric)
-                    .subtitle(latestResume.getOriginalFileName())
+                    .subtitle(fileName)
                     .ctaLabel("View & Optimize")
                     .ctaLink("/dashboard/resume")
                     .isCompleted(true)
@@ -396,13 +470,14 @@ public class DashboardServiceImpl implements DashboardService {
         } else {
             InterviewSessionEntity latest = completedSessions.get(0);
             String scoreStr = latest.getOverallScore() != null ? ("Latest Score: " + latest.getOverallScore() + "/100") : "Report Available";
+            String compName = latest.getCompanyName() != null ? latest.getCompanyName() : "Placement Practice";
             interviewCard = DashboardSummaryDto.CardStatus.builder()
                     .key("interview")
                     .title("Mock Interview")
                     .state("COMPLETED")
                     .stateLabel(completedSessions.size() + " Completed")
                     .primaryMetric(scoreStr)
-                    .subtitle(latest.getCompanyName() != null ? latest.getCompanyName() : "Placement Practice")
+                    .subtitle(compName)
                     .ctaLabel("Take Another")
                     .ctaLink("/dashboard/interview")
                     .isCompleted(true)
@@ -581,11 +656,12 @@ public class DashboardServiceImpl implements DashboardService {
 
         // Resumes
         for (ResumeEntity r : resumes) {
-            if (r.getUploadDate() != null) {
+            if (r != null && r.getUploadDate() != null) {
+                String fileName = r.getOriginalFileName() != null ? r.getOriginalFileName() : "Resume";
                 activities.add(DashboardSummaryDto.RecentActivityDto.builder()
-                        .id("act-res-" + r.getId())
+                        .id("act-res-" + (r.getId() != null ? r.getId() : UUID.randomUUID().toString()))
                         .title("Resume Uploaded")
-                        .description(r.getOriginalFileName() + " uploaded for analysis")
+                        .description(fileName + " uploaded for analysis")
                         .type("RESUME_UPLOAD")
                         .timestamp(r.getUploadDate().format(isoFormatter))
                         .relativeTime(formatRelativeTime(r.getUploadDate()))
@@ -596,13 +672,16 @@ public class DashboardServiceImpl implements DashboardService {
 
         // Completed Interviews
         for (InterviewSessionEntity s : completedSessions) {
+            if (s == null) continue;
             LocalDateTime time = s.getEndedAt() != null ? s.getEndedAt() : s.getStartedAt();
             if (time != null) {
+                String compName = s.getCompanyName() != null ? s.getCompanyName() : "Interview Practice";
+                String diff = s.getDifficulty() != null ? s.getDifficulty() : "Practice";
                 String scoreTxt = s.getOverallScore() != null ? ("Scored " + s.getOverallScore() + "/100") : "Completed";
                 activities.add(DashboardSummaryDto.RecentActivityDto.builder()
-                        .id("act-int-" + s.getId())
+                        .id("act-int-" + (s.getId() != null ? s.getId() : UUID.randomUUID().toString()))
                         .title("Mock Interview Completed")
-                        .description(s.getCompanyName() + " (" + s.getDifficulty() + ") · " + scoreTxt)
+                        .description(compName + " (" + diff + ") · " + scoreTxt)
                         .type("INTERVIEW_COMPLETED")
                         .timestamp(time.format(isoFormatter))
                         .relativeTime(formatRelativeTime(time))
@@ -613,12 +692,16 @@ public class DashboardServiceImpl implements DashboardService {
 
         // Applications
         for (ApplicationEntity a : applications) {
+            if (a == null) continue;
             LocalDateTime time = a.getUpdatedAt() != null ? a.getUpdatedAt() : a.getCreatedAt();
             if (time != null) {
+                String compName = a.getCompanyName() != null ? a.getCompanyName() : "Job Application";
+                String roleName = a.getRole() != null ? a.getRole() : "Candidate";
+                String statusName = a.getStatus() != null ? a.getStatus() : "Applied";
                 activities.add(DashboardSummaryDto.RecentActivityDto.builder()
-                        .id("act-app-" + a.getId())
-                        .title("Application: " + a.getCompanyName())
-                        .description(a.getRole() + " · Status: " + a.getStatus())
+                        .id("act-app-" + (a.getId() != null ? a.getId() : UUID.randomUUID().toString()))
+                        .title("Application: " + compName)
+                        .description(roleName + " · Status: " + statusName)
                         .type("APPLICATION_ADDED")
                         .timestamp(time.format(isoFormatter))
                         .relativeTime(formatRelativeTime(time))
@@ -629,11 +712,14 @@ public class DashboardServiceImpl implements DashboardService {
 
         // Roadmaps
         for (RoadmapEntity rm : roadmaps) {
-            if (rm.getCreatedAt() != null) {
+            if (rm != null && rm.getCreatedAt() != null) {
+                String comp = rm.getCompany() != null ? rm.getCompany() : "Career";
+                String role = rm.getRole() != null ? rm.getRole() : "Developer";
+                String duration = rm.getDuration() != null ? rm.getDuration() : "8 Weeks";
                 activities.add(DashboardSummaryDto.RecentActivityDto.builder()
-                        .id("act-rm-" + rm.getId())
+                        .id("act-rm-" + (rm.getId() != null ? rm.getId() : UUID.randomUUID().toString()))
                         .title("Roadmap Generated")
-                        .description(rm.getCompany() + " · " + rm.getRole() + " (" + rm.getDuration() + ")")
+                        .description(comp + " · " + role + " (" + duration + ")")
                         .type("ROADMAP_GENERATED")
                         .timestamp(rm.getCreatedAt().format(isoFormatter))
                         .relativeTime(formatRelativeTime(rm.getCreatedAt()))
@@ -643,7 +729,12 @@ public class DashboardServiceImpl implements DashboardService {
         }
 
         // Sort descending by timestamp
-        activities.sort((a, b) -> b.getTimestamp().compareTo(a.getTimestamp()));
+        activities.sort((a, b) -> {
+            if (a.getTimestamp() == null && b.getTimestamp() == null) return 0;
+            if (a.getTimestamp() == null) return 1;
+            if (b.getTimestamp() == null) return -1;
+            return b.getTimestamp().compareTo(a.getTimestamp());
+        });
 
         // Limit to 6 items
         return activities.stream().limit(6).collect(Collectors.toList());

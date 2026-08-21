@@ -28,7 +28,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -94,6 +93,44 @@ class DashboardServiceTest {
     }
 
     @Test
+    void testPartialUser_ResumeOnly_ReturnsHonestMetricsAndPrioritizedNextActions() {
+        User user = new User();
+        user.setId(100L);
+        user.setFullName("Priya Patel");
+        user.setEmail("priya@example.com");
+
+        ResumeEntity resume = new ResumeEntity();
+        resume.setId(5L);
+        resume.setUserId(100L);
+        resume.setOriginalFileName("Priya_Resume.pdf");
+        resume.setExtractedText("Full Stack Developer with React and Node experience");
+        resume.setUploadDate(LocalDateTime.now().minusDays(1));
+
+        AtsResponse ats = new AtsResponse();
+        ats.setOverallScore(78);
+
+        when(userRepository.findById(100L)).thenReturn(Optional.of(user));
+        when(resumeRepository.findByUserIdOrderByUploadDateDesc(100L)).thenReturn(List.of(resume));
+        when(atsAnalyzer.analyze(any())).thenReturn(ats);
+        when(interviewSessionRepository.findByUserIdOrderByStartedAtDesc(100L)).thenReturn(Collections.emptyList());
+        when(applicationRepository.findByUserIdOrderByLastUpdatedDesc(100L)).thenReturn(Collections.emptyList());
+        when(userCompanyPrepRepository.findByUserId(100L)).thenReturn(Collections.emptyList());
+        when(roadmapRepository.findByUserIdOrderByCreatedAtDesc(100L)).thenReturn(Collections.emptyList());
+
+        DashboardSummaryDto summary = dashboardService.getDashboardSummary(100L);
+
+        assertNotNull(summary);
+        assertEquals("Priya", summary.getGreeting().getName());
+        assertFalse(summary.getPlacementReadiness().isAvailable(), "Readiness must require >= 2 milestones");
+        assertEquals("ANALYZED", summary.getJourney().getResume().getState());
+        assertEquals("ATS Score: 78/100", summary.getJourney().getResume().getPrimaryMetric());
+        assertEquals("NOT_ATTEMPTED", summary.getJourney().getMockInterview().getState());
+        assertEquals("EMPTY", summary.getJourney().getApplications().getState());
+        assertEquals(1, summary.getRecentActivity().size());
+        assertEquals("Resume Uploaded", summary.getRecentActivity().get(0).getTitle());
+    }
+
+    @Test
     void testActiveUser_WithRealData_CalculatesReadinessAndActivity() {
         User user = new User();
         user.setId(100L);
@@ -154,5 +191,25 @@ class DashboardServiceTest {
         assertEquals("ACTIVE", summary.getJourney().getApplications().getState());
         assertFalse(summary.getRecentActivity().isEmpty(), "Recent activity must contain real user events");
         assertEquals(3, summary.getRecentActivity().size());
+    }
+
+    @Test
+    void testFaultTolerance_WhenRepositoriesThrowExceptions_ReturnsCleanEmptyStateWithoutCrashing() {
+        when(userRepository.findById(100L)).thenThrow(new RuntimeException("Database timeout"));
+        when(resumeRepository.findByUserIdOrderByUploadDateDesc(100L)).thenThrow(new RuntimeException("Table missing"));
+        when(interviewSessionRepository.findByUserIdOrderByStartedAtDesc(100L)).thenThrow(new RuntimeException("Connection error"));
+        when(applicationRepository.findByUserIdOrderByLastUpdatedDesc(100L)).thenThrow(new RuntimeException("Query failure"));
+        when(userCompanyPrepRepository.findByUserId(100L)).thenThrow(new RuntimeException("JPA error"));
+        when(roadmapRepository.findByUserIdOrderByCreatedAtDesc(100L)).thenThrow(new RuntimeException("Timeout"));
+
+        DashboardSummaryDto summary = dashboardService.getDashboardSummary(100L);
+
+        assertNotNull(summary, "Dashboard summary must never be null even on database error");
+        assertEquals("Candidate", summary.getGreeting().getName());
+        assertFalse(summary.getPlacementReadiness().isAvailable());
+        assertEquals("NOT_ENOUGH_DATA", summary.getPlacementReadiness().getStatus());
+        assertNotNull(summary.getJourney());
+        assertNotNull(summary.getNextActions());
+        assertNotNull(summary.getRecentActivity());
     }
 }

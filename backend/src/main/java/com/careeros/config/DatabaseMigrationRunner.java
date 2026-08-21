@@ -57,6 +57,63 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
             executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_email_verification_otps_email ON email_verification_otps(email);", "email_verification_otps.email index");
             executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_email_verification_otps_expiry ON email_verification_otps(expiry_time);", "email_verification_otps.expiry index");
 
+            // 4b. Core CareerOS Tables
+            executeMigration(stmt, """
+                CREATE TABLE IF NOT EXISTS resumes (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    original_file_name VARCHAR(255) NOT NULL,
+                    stored_file_name VARCHAR(255) NOT NULL,
+                    file_size BIGINT NOT NULL,
+                    file_type VARCHAR(50) NOT NULL,
+                    extracted_text TEXT,
+                    upload_date TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+            """, "resumes table");
+            executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id);", "resumes.user_id index");
+
+            executeMigration(stmt, """
+                CREATE TABLE IF NOT EXISTS applications (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    company_name VARCHAR(255) NOT NULL,
+                    company_logo VARCHAR(255),
+                    role VARCHAR(255) NOT NULL,
+                    package_value VARCHAR(100),
+                    location VARCHAR(255),
+                    applied_date VARCHAR(100),
+                    last_updated VARCHAR(100),
+                    status VARCHAR(50) NOT NULL DEFAULT 'Applied',
+                    next_round VARCHAR(100),
+                    notes TEXT,
+                    recruiter VARCHAR(255),
+                    recruiter_email VARCHAR(255),
+                    application_link VARCHAR(500),
+                    deadline VARCHAR(100),
+                    priority VARCHAR(50) NOT NULL DEFAULT 'Medium',
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+            """, "applications table");
+            executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_applications_user_id ON applications(user_id);", "applications.user_id index");
+
+            executeMigration(stmt, """
+                CREATE TABLE IF NOT EXISTS roadmaps (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    company VARCHAR(255) NOT NULL,
+                    role VARCHAR(255) NOT NULL,
+                    duration VARCHAR(100) NOT NULL,
+                    total_weeks INT NOT NULL DEFAULT 8,
+                    focus_areas TEXT,
+                    current_skills TEXT,
+                    weekly_plans TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+            """, "roadmaps table");
+            executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_roadmaps_user_id ON roadmaps(user_id);", "roadmaps.user_id index");
+
             // 5. Companies Module Tables
             executeMigration(stmt, """
                 CREATE TABLE IF NOT EXISTS companies (
