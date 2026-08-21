@@ -22,12 +22,18 @@ public class CorsConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-// Allowed origin(s) — frontend dev server
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:5174"));
+        // Allowed origins — production Vercel frontend & local development
+        configuration.setAllowedOriginPatterns(List.of(
+                "https://career-os-seven-teal.vercel.app",
+                "https://*.vercel.app",
+                "http://localhost:5173",
+                "http://localhost:5174",
+                "http://localhost:3000"
+        ));
 
         // Allowed HTTP methods
         configuration.setAllowedMethods(List.of(
-                "GET", "POST", "PUT", "DELETE", "OPTIONS"
+                "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
         ));
 
         // Allowed headers
