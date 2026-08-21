@@ -45,17 +45,27 @@ public class EmailService {
     public void sendVerificationOtp(String toEmail, String fullName, String otp) {
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
 
-        boolean hasCredentials = mailUsername != null && !mailUsername.trim().isEmpty()
-                && mailPassword != null && !mailPassword.trim().isEmpty();
+        boolean hasUsername = mailUsername != null && !mailUsername.trim().isEmpty();
+        boolean hasPassword = mailPassword != null && !mailPassword.trim().isEmpty();
 
-        if (mailSender == null || !hasCredentials) {
-            log.warn("================================================================================");
-            log.warn("[SMTP CONFIGURATION MISSING]");
-            log.warn("MAIL_USERNAME or MAIL_PASSWORD is not set in the environment.");
-            log.warn("To enable real email delivery, set MAIL_USERNAME and MAIL_PASSWORD in Render Environment.");
-            log.warn("Generated 6-Digit OTP for [{}] ({}): [{}] (Expires in 10 minutes)", toEmail, fullName, otp);
-            log.warn("================================================================================");
-            return;
+        log.info("================================================================================");
+        log.info("[SMTP DIAGNOSTIC] Email sending requested for: [{}]", toEmail);
+        log.info("[SMTP DIAGNOSTIC] Configuration Check:");
+        log.info("  - Host: [{}]", mailHost);
+        log.info("  - Port: [{}]", mailPort);
+        log.info("  - MAIL_USERNAME present: [{}] (Value: [{}])", hasUsername, hasUsername ? mailUsername : "EMPTY/MISSING");
+        log.info("  - MAIL_PASSWORD present: [{}]", hasPassword);
+        log.info("  - MAIL_FROM: [{}]", (fromAddress != null && !fromAddress.trim().isEmpty()) ? fromAddress : "(default to username)");
+        log.info("  - JavaMailSender bean available: [{}]", (mailSender != null));
+        log.info("================================================================================");
+
+        if (mailSender == null || !hasUsername || !hasPassword) {
+            log.error("[SMTP CONFIGURATION ERROR] Cannot send email. Missing credentials:");
+            log.error("  - MAIL_USERNAME configured: {}", hasUsername);
+            log.error("  - MAIL_PASSWORD configured: {}", hasPassword);
+            log.error("  - Please add MAIL_USERNAME and MAIL_PASSWORD in Render Environment variables.");
+            log.warn("[FALLBACK LOG] Generated OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
+            throw new IllegalStateException("Email delivery failed: SMTP credentials (MAIL_USERNAME / MAIL_PASSWORD) are not configured on the server.");
         }
 
         // Determine effective From address (Gmail requires authenticated sender email)
@@ -63,7 +73,7 @@ public class EmailService {
                 ? fromAddress.trim()
                 : mailUsername.trim();
 
-        log.info("[SMTP] Preparing OTP email for [{}] via {}:{} from [{}]...", toEmail, mailHost, mailPort, effectiveFrom);
+        log.info("[SMTP SEND] Initiating SMTP connection to {}:{} from [{}] to [{}]...", mailHost, mailPort, effectiveFrom, toEmail);
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -83,17 +93,24 @@ public class EmailService {
             helper.setText(textContent, htmlContent);
 
             mailSender.send(message);
-            log.info("[SMTP SUCCESS] Verification email containing OTP successfully delivered to [{}]", toEmail);
+            log.info("================================================================================");
+            log.info("[SMTP SUCCESS] 6-digit OTP verification email successfully delivered to [{}]", toEmail);
+            log.info("================================================================================");
 
         } catch (Exception e) {
             log.error("================================================================================");
             log.error("[SMTP ERROR] Failed to send email to [{}]: {}", toEmail, e.getMessage());
+            log.error("Exception Class: {}", e.getClass().getName());
+            if (e.getCause() != null) {
+                log.error("Root Cause: {} - {}", e.getCause().getClass().getName(), e.getCause().getMessage());
+            }
             log.error("Troubleshooting guide for Gmail SMTP:");
-            log.error("1. Ensure 2-Step Verification is ENABLED on your Google Account ({}).", mailUsername);
-            log.error("2. Ensure MAIL_PASSWORD is an 16-character Google App Password (not your personal account password).");
+            log.error("1. Ensure 2-Step Verification is ENABLED on Google Account: {}", mailUsername);
+            log.error("2. Ensure MAIL_PASSWORD is a 16-character Google App Password (not standard account password).");
             log.error("3. Generate a Google App Password at: https://myaccount.google.com/apppasswords");
             log.error("OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
             log.error("================================================================================", e);
+            throw new RuntimeException("SMTP delivery failure: " + e.getMessage(), e);
         }
     }
 

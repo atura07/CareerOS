@@ -14,6 +14,7 @@ import com.careeros.user.Role;
 import com.careeros.user.User;
 import com.careeros.user.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -83,8 +85,10 @@ public class AuthService {
     @Transactional
     public AuthenticationResponse sendOtp(SendOtpRequest request) {
         String email = request.getEmail().trim().toLowerCase();
+        log.info("[AUTH OTP FLOW] 1. Received request to send OTP for email: [{}]", email);
 
         if (!otpService.canResend(email)) {
+            log.warn("[AUTH OTP FLOW] Resend rate limit hit for email: [{}]", email);
             throw new IllegalArgumentException("Please wait at least 60 seconds before requesting another code.");
         }
 
@@ -98,8 +102,11 @@ public class AuthService {
 
         String purpose = request.getPurpose() != null ? request.getPurpose() : "LOGIN";
         String rawOtp = otpService.generateAndSaveOtp(email, purpose);
+        log.info("[AUTH OTP FLOW] 2. Generated and saved OTP hash in DB for [{}], purpose=[{}]", email, purpose);
 
+        log.info("[AUTH OTP FLOW] 3. Calling EmailService to dispatch OTP email to [{}]...", email);
         emailService.sendVerificationOtp(email, fullName, rawOtp);
+        log.info("[AUTH OTP FLOW] 4. EmailService successfully finished dispatching to [{}]", email);
 
         return AuthenticationResponse.builder()
                 .email(email)
@@ -182,10 +189,13 @@ public class AuthService {
                 .build();
 
         userService.save(user);
+        log.info("[AUTH REGISTER] User registered with ID: [{}], email: [{}]", user.getId(), user.getEmail());
 
         // Generate secure 6-digit OTP and send verification email
         String rawOtp = otpService.generateAndSaveOtp(user.getEmail(), "VERIFY");
+        log.info("[AUTH REGISTER] Calling EmailService to dispatch verification OTP to [{}]...", user.getEmail());
         emailService.sendVerificationOtp(user.getEmail(), user.getFullName(), rawOtp);
+        log.info("[AUTH REGISTER] EmailService completed for [{}]", user.getEmail());
 
         return AuthenticationResponse.builder()
                 .email(user.getEmail())
