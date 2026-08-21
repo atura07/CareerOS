@@ -1,116 +1,132 @@
 package com.careeros.auth.email;
 
-import jakarta.mail.internet.MimeMessage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
+/**
+ * Service for delivering transactional authentication emails (6-digit OTPs)
+ * via Resend's reliable HTTP REST API.
+ */
+@Slf4j
 @Service
 public class EmailService {
 
-    private static final Logger log = LoggerFactory.getLogger(EmailService.class);
+    private static final String RESEND_API_URL = "https://api.resend.com/emails";
 
-    private final ObjectProvider<JavaMailSender> mailSenderProvider;
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
 
-    @Value("${spring.mail.host:smtp.gmail.com}")
-    private String mailHost;
+    @Value("${application.resend.api-key:${RESEND_API_KEY:}}")
+    private String resendApiKey;
 
-    @Value("${spring.mail.port:587}")
-    private int mailPort;
-
-    @Value("${spring.mail.username:}")
-    private String mailUsername;
-
-    @Value("${spring.mail.password:}")
-    private String mailPassword;
-
-    @Value("${application.mail.from:}")
+    @Value("${application.mail.from:${MAIL_FROM:onboarding@resend.dev}}")
     private String fromAddress;
 
-    public EmailService(ObjectProvider<JavaMailSender> mailSenderProvider) {
-        this.mailSenderProvider = mailSenderProvider;
+    public EmailService(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
     }
 
     /**
-     * Sends a 6-digit OTP verification email to the user.
-     * If SMTP credentials are not yet configured in the environment,
-     * logs the OTP clearly in server logs for development/testing.
+     * Sends a 6-digit OTP verification email to the user via Resend HTTP API.
      */
     public void sendVerificationOtp(String toEmail, String fullName, String otp) {
-        JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
-
-        boolean hasUsername = mailUsername != null && !mailUsername.trim().isEmpty();
-        boolean hasPassword = mailPassword != null && !mailPassword.trim().isEmpty();
+        boolean hasApiKey = resendApiKey != null && !resendApiKey.trim().isEmpty();
 
         log.info("================================================================================");
-        log.info("[SMTP DIAGNOSTIC] Email sending requested for: [{}]", toEmail);
-        log.info("[SMTP DIAGNOSTIC] Configuration Check:");
-        log.info("  - Host: [{}]", mailHost);
-        log.info("  - Port: [{}]", mailPort);
-        log.info("  - MAIL_USERNAME present: [{}] (Value: [{}])", hasUsername, hasUsername ? mailUsername : "EMPTY/MISSING");
-        log.info("  - MAIL_PASSWORD present: [{}]", hasPassword);
-        log.info("  - MAIL_FROM: [{}]", (fromAddress != null && !fromAddress.trim().isEmpty()) ? fromAddress : "(default to username)");
-        log.info("  - JavaMailSender bean available: [{}]", (mailSender != null));
+        log.info("[EMAIL API] Initiating OTP email dispatch for: [{}]", toEmail);
+        log.info("[EMAIL API] Configuration Check:");
+        log.info("  - Provider: Resend HTTP REST API");
+        log.info("  - RESEND_API_KEY configured: [{}]", hasApiKey);
+        log.info("  - MAIL_FROM configured: [{}]", fromAddress);
         log.info("================================================================================");
 
-        if (mailSender == null || !hasUsername || !hasPassword) {
-            log.error("[SMTP CONFIGURATION ERROR] Cannot send email. Missing credentials:");
-            log.error("  - MAIL_USERNAME configured: {}", hasUsername);
-            log.error("  - MAIL_PASSWORD configured: {}", hasPassword);
-            log.error("  - Please add MAIL_USERNAME and MAIL_PASSWORD in Render Environment variables.");
+        if (!hasApiKey) {
+            log.error("[EMAIL FAILURE] RESEND_API_KEY is not configured in the server environment.");
+            log.error("Please add RESEND_API_KEY in Render Environment Variables.");
             log.warn("[FALLBACK LOG] Generated OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
-            throw new IllegalStateException("Email delivery failed: SMTP credentials (MAIL_USERNAME / MAIL_PASSWORD) are not configured on the server.");
+            throw new IllegalStateException("Email delivery failed: RESEND_API_KEY is not configured on the server. Please add it to Render Environment.");
         }
 
-        // Determine effective From address (Gmail requires authenticated sender email)
-        String effectiveFrom = (fromAddress != null && !fromAddress.trim().isEmpty() && !fromAddress.contains("noreply@careeros.com"))
+        // Format sender address nicely for email clients
+        String effectiveFrom = fromAddress != null && !fromAddress.trim().isEmpty()
                 ? fromAddress.trim()
-                : mailUsername.trim();
+                : "onboarding@resend.dev";
 
-        log.info("[SMTP SEND] Initiating SMTP connection to {}:{} from [{}] to [{}]...", mailHost, mailPort, effectiveFrom, toEmail);
+        if (!effectiveFrom.contains("<") && !effectiveFrom.contains(">")) {
+            effectiveFrom = "CareerOS <" + effectiveFrom + ">";
+        }
+
+        String subject = "Your CareerOS Verification Code: " + otp;
+        String htmlContent = buildOtpHtmlEmail(fullName, otp);
+        String textContent = buildOtpTextEmail(fullName, otp);
 
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(
-                    message,
-                    MimeMessageHelper.MULTIPART_MODE_MIXED_RELATED,
-                    StandardCharsets.UTF_8.name()
-            );
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("from", effectiveFrom);
+            payload.put("to", Collections.singletonList(toEmail.trim()));
+            payload.put("subject", subject);
+            payload.put("html", htmlContent);
+            payload.put("text", textContent);
 
-            helper.setFrom(effectiveFrom, "CareerOS");
-            helper.setTo(toEmail.trim());
-            helper.setSubject("Your CareerOS Verification Code: " + otp);
+            String requestBody = objectMapper.writeValueAsString(payload);
 
-            String htmlContent = buildOtpHtmlEmail(fullName, otp);
-            String textContent = buildOtpTextEmail(fullName, otp);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(RESEND_API_URL))
+                    .timeout(Duration.ofSeconds(15))
+                    .header("Authorization", "Bearer " + resendApiKey.trim())
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .build();
 
-            helper.setText(textContent, htmlContent);
+            log.info("[EMAIL API] Sending POST request to Resend API for [{}] from [{}]...", toEmail, effectiveFrom);
 
-            mailSender.send(message);
-            log.info("================================================================================");
-            log.info("[SMTP SUCCESS] 6-digit OTP verification email successfully delivered to [{}]", toEmail);
-            log.info("================================================================================");
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                log.info("================================================================================");
+                log.info("[EMAIL SUCCESS] OTP verification email successfully delivered via Resend!");
+                log.info("  - Recipient: [{}]", toEmail);
+                log.info("  - Status Code: [{}]", response.statusCode());
+                log.info("  - Resend Response: [{}]", response.body());
+                log.info("================================================================================");
+            } else {
+                log.error("================================================================================");
+                log.error("[EMAIL FAILURE] Resend API rejected email sending!");
+                log.error("  - Recipient: [{}]", toEmail);
+                log.error("  - HTTP Status: [{}]", response.statusCode());
+                log.error("  - Error Response Body: [{}]", response.body());
+                log.warn("[FALLBACK LOG] Generated OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
+                log.error("================================================================================");
+
+                throw new RuntimeException("Failed to deliver verification email (Resend HTTP "
+                        + response.statusCode() + "): " + response.body());
+            }
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("[EMAIL FAILURE] Email dispatch interrupted for [{}]: {}", toEmail, e.getMessage(), e);
+            throw new RuntimeException("Email delivery was interrupted. Please try again.", e);
         } catch (Exception e) {
             log.error("================================================================================");
-            log.error("[SMTP ERROR] Failed to send email to [{}]: {}", toEmail, e.getMessage());
-            log.error("Exception Class: {}", e.getClass().getName());
-            if (e.getCause() != null) {
-                log.error("Root Cause: {} - {}", e.getCause().getClass().getName(), e.getCause().getMessage());
-            }
-            log.error("Troubleshooting guide for Gmail SMTP:");
-            log.error("1. Ensure 2-Step Verification is ENABLED on Google Account: {}", mailUsername);
-            log.error("2. Ensure MAIL_PASSWORD is a 16-character Google App Password (not standard account password).");
-            log.error("3. Generate a Google App Password at: https://myaccount.google.com/apppasswords");
-            log.error("OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
+            log.error("[EMAIL FAILURE] Exception occurred while communicating with Resend API for [{}]: {}", toEmail, e.getMessage());
+            log.warn("[FALLBACK LOG] Generated OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
             log.error("================================================================================", e);
-            throw new RuntimeException("SMTP delivery failure: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to dispatch verification code: " + e.getMessage(), e);
         }
     }
 
@@ -176,4 +192,3 @@ public class EmailService {
                 "</html>";
     }
 }
-
