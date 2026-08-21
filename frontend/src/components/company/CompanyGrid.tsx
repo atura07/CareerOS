@@ -1,10 +1,10 @@
 import { motion } from 'framer-motion'
 import { Building2 } from 'lucide-react'
 import { CompanyCard } from './CompanyCard'
-import type { Company } from '../../data/companies'
+import type { CompanySummary } from '../../services/api'
 
 interface CompanyGridProps {
-  companies: Company[]
+  companies: CompanySummary[]
 }
 
 const containerVariants = {

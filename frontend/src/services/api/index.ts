@@ -24,6 +24,43 @@ export {
   deleteRoadmap,
 } from './roadmapService'
 export { analyzeResumeById, analyzeText, analyzeResumeAgainstJobDescription } from './atsService'
+export {
+  getCompanies,
+  getCompanyBySlug,
+  getUserCompanyPrep,
+  startCompanyPrep,
+  toggleCompanyPrepTask,
+} from './companyService'
+export type {
+  CompanySummary,
+  CompanyDetail,
+  CompanyRole,
+  InterviewProcess,
+  CompanyPrepTopic,
+  UserCompanyPrep,
+  UserPrepTask,
+  StartPrepPayload,
+} from './companyService'
+export {
+  createInterviewSession,
+  getInterviewHistory,
+  getInterviewSession,
+  getNextInterviewQuestion,
+  submitInterviewAnswer,
+  completeInterviewSession,
+  getInterviewReport,
+} from './interviewService'
+export type {
+  InterviewType,
+  InterviewDifficulty,
+  CreateSessionPayload,
+  SubmitAnswerPayload,
+  InterviewQuestion,
+  InterviewAnswer,
+  InterviewReport,
+  InterviewSession,
+  InterviewHistoryItem,
+} from './interviewService'
 export type {
   RegisterRequest,
   AuthenticationRequest,
@@ -33,8 +70,6 @@ export type {
   ResendOtpRequest,
   AuthenticationResponse,
   ResumeResponse,
-
-
   KeywordMatch,
   AtsSuggestion,
   AtsResponse,
@@ -44,4 +79,5 @@ export type {
   RoadmapDto,
   ApiError,
 } from './types'
+
 
