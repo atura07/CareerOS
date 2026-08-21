@@ -10,6 +10,17 @@ const googleClientId =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
   '277452983880-l16lgkp6n1rbp139vj9smcpl0ji0qp5e.apps.googleusercontent.com'
 
+if (typeof window !== 'undefined') {
+  console.log('[Google Auth Audit] window.location.origin:', window.location.origin)
+  console.log('[Google Auth Audit] window.location.host:', window.location.host)
+  console.log(
+    '[Google Auth Audit] Active Client ID:',
+    googleClientId
+      ? `${googleClientId.substring(0, 12)}...${googleClientId.slice(-28)}`
+      : 'NOT_CONFIGURED'
+  )
+}
+
 
 
 createRoot(document.getElementById('root')!).render(
