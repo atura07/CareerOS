@@ -1,6 +1,5 @@
 package com.careeros.auth.email;
 
-import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,10 +18,19 @@ public class EmailService {
 
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
 
+    @Value("${spring.mail.host:smtp.gmail.com}")
+    private String mailHost;
+
+    @Value("${spring.mail.port:587}")
+    private int mailPort;
+
     @Value("${spring.mail.username:}")
     private String mailUsername;
 
-    @Value("${application.mail.from:noreply@careeros.com}")
+    @Value("${spring.mail.password:}")
+    private String mailPassword;
+
+    @Value("${application.mail.from:}")
     private String fromAddress;
 
     public EmailService(ObjectProvider<JavaMailSender> mailSenderProvider) {
@@ -31,19 +39,31 @@ public class EmailService {
 
     /**
      * Sends a 6-digit OTP verification email to the user.
-     * If SMTP credentials are not configured, logs the OTP safely for local development.
+     * If SMTP credentials are not yet configured in the environment,
+     * logs the OTP clearly in server logs for development/testing.
      */
     public void sendVerificationOtp(String toEmail, String fullName, String otp) {
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
 
-        if (mailSender == null || mailUsername == null || mailUsername.trim().isEmpty()) {
-            log.warn("================================================================");
-            log.warn("SMTP NOT CONFIGURED (Set MAIL_USERNAME and MAIL_PASSWORD)");
-            log.warn("Verification OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
-            log.warn("Expires in 10 minutes.");
-            log.warn("================================================================");
+        boolean hasCredentials = mailUsername != null && !mailUsername.trim().isEmpty()
+                && mailPassword != null && !mailPassword.trim().isEmpty();
+
+        if (mailSender == null || !hasCredentials) {
+            log.warn("================================================================================");
+            log.warn("[SMTP CONFIGURATION MISSING]");
+            log.warn("MAIL_USERNAME or MAIL_PASSWORD is not set in the environment.");
+            log.warn("To enable real email delivery, set MAIL_USERNAME and MAIL_PASSWORD in Render Environment.");
+            log.warn("Generated 6-Digit OTP for [{}] ({}): [{}] (Expires in 10 minutes)", toEmail, fullName, otp);
+            log.warn("================================================================================");
             return;
         }
+
+        // Determine effective From address (Gmail requires authenticated sender email)
+        String effectiveFrom = (fromAddress != null && !fromAddress.trim().isEmpty() && !fromAddress.contains("noreply@careeros.com"))
+                ? fromAddress.trim()
+                : mailUsername.trim();
+
+        log.info("[SMTP] Preparing OTP email for [{}] via {}:{} from [{}]...", toEmail, mailHost, mailPort, effectiveFrom);
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -53,9 +73,9 @@ public class EmailService {
                     StandardCharsets.UTF_8.name()
             );
 
-            helper.setFrom(fromAddress, "CareerOS");
-            helper.setTo(toEmail);
-            helper.setSubject("Verify your CareerOS account");
+            helper.setFrom(effectiveFrom, "CareerOS");
+            helper.setTo(toEmail.trim());
+            helper.setSubject("Your CareerOS Verification Code: " + otp);
 
             String htmlContent = buildOtpHtmlEmail(fullName, otp);
             String textContent = buildOtpTextEmail(fullName, otp);
@@ -63,11 +83,17 @@ public class EmailService {
             helper.setText(textContent, htmlContent);
 
             mailSender.send(message);
-            log.info("Verification email sent successfully to {}", toEmail);
+            log.info("[SMTP SUCCESS] Verification email containing OTP successfully delivered to [{}]", toEmail);
 
-        } catch (MessagingException | java.io.UnsupportedEncodingException e) {
-            log.error("Failed to send verification email to {}: {}", toEmail, e.getMessage(), e);
-            throw new RuntimeException("Failed to send verification email. Please try again later.", e);
+        } catch (Exception e) {
+            log.error("================================================================================");
+            log.error("[SMTP ERROR] Failed to send email to [{}]: {}", toEmail, e.getMessage());
+            log.error("Troubleshooting guide for Gmail SMTP:");
+            log.error("1. Ensure 2-Step Verification is ENABLED on your Google Account ({}).", mailUsername);
+            log.error("2. Ensure MAIL_PASSWORD is an 16-character Google App Password (not your personal account password).");
+            log.error("3. Generate a Google App Password at: https://myaccount.google.com/apppasswords");
+            log.error("OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
+            log.error("================================================================================", e);
         }
     }
 
@@ -76,8 +102,8 @@ public class EmailService {
                 "Your CareerOS verification code is:\n\n" +
                 otp + "\n\n" +
                 "This code expires in 10 minutes.\n\n" +
-                "If you did not create this account, please ignore this email.\n\n" +
-                "CareerOS Team";
+                "If you did not request this verification, please ignore this email.\n\n" +
+                "— CareerOS Team";
     }
 
     private String buildOtpHtmlEmail(String fullName, String otp) {
@@ -105,7 +131,7 @@ public class EmailService {
                 "</tr>" +
                 "<tr>" +
                 "<td style='font-size:15px;line-height:22px;color:#94a3b8;padding-bottom:28px;'>" +
-                "Thank you for signing up for CareerOS. Please use the following 6-digit verification code to complete your registration:" +
+                "Please use the following 6-digit verification code to complete your CareerOS verification:" +
                 "</td>" +
                 "</tr>" +
                 "<tr>" +
@@ -133,3 +159,4 @@ public class EmailService {
                 "</html>";
     }
 }
+
