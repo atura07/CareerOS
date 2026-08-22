@@ -33,6 +33,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/companies/*/preparation/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/companies", "/api/v1/companies/**").permitAll()
+                        .requestMatchers("/api/v1/leetcode/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session ->

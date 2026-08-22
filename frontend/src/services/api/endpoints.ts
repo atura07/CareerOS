@@ -35,5 +35,8 @@ export const ENDPOINTS = {
 
   // Dashboard
   DASHBOARD_SUMMARY: '/v1/dashboard/summary',
+
+  // LeetCode
+  LEETCODE: (username?: string) => (username ? `/v1/leetcode/${encodeURIComponent(username)}` : '/v1/leetcode'),
 } as const
 

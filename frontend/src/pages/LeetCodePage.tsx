@@ -98,7 +98,7 @@ export function LeetCodePage() {
         </div>
         <p className="mt-1 text-sm text-white/50">
           Live data for&nbsp;
-          <span className="font-medium text-amber-400">@{LEETCODE_USERNAME}</span> — track your
+          <span className="font-medium text-amber-400">@{data?.profile?.username ?? LEETCODE_USERNAME}</span> — track your
           problem-solving progress, contests, and daily streaks.
         </p>
       </motion.div>
