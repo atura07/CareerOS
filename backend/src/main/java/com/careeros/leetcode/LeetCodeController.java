@@ -29,7 +29,7 @@ public class LeetCodeController {
     /**
      * Get the authenticated user's connected LeetCode status and complete dashboard data.
      */
-    @GetMapping({"/me", "/status"})
+    @GetMapping({"/connection", "/me", "/status"})
     public ResponseEntity<LeetCodeStatusResponse> getAccountStatus(
             @RequestParam(value = "userId", required = false) Long paramUserId,
             @AuthenticationPrincipal Object principal,

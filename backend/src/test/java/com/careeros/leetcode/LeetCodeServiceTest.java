@@ -63,6 +63,7 @@ class LeetCodeServiceTest {
         LeetCodeStatusResponse status = leetCodeService.getAccountStatus(10L);
         assertNotNull(status);
         assertFalse(status.isConnected());
+        assertNull(status.getData());
     }
 
     @Test
@@ -106,6 +107,13 @@ class LeetCodeServiceTest {
     }
 
     @Test
+    void testConnectAccount_InvalidUsername_ThrowsException() {
+        assertThrows(ResourceNotFoundException.class, () -> {
+            leetCodeService.connectAccount(10L, "non_existent_lc_user_123456789");
+        });
+    }
+
+    @Test
     void testDisconnectAccount() {
         LeetCodeAccountEntity entity = LeetCodeAccountEntity.builder()
                 .id(1L)
@@ -119,6 +127,24 @@ class LeetCodeServiceTest {
         leetCodeService.disconnectAccount(10L);
         assertFalse(entity.isConnected());
         verify(accountRepository, times(1)).save(entity);
+    }
+
+    @Test
+    void testMultiUserIsolation() {
+        LeetCodeAccountEntity userA = LeetCodeAccountEntity.builder()
+                .id(1L).userId(10L).username("atul_yadav").connected(true).build();
+        LeetCodeAccountEntity userB = LeetCodeAccountEntity.builder()
+                .id(2L).userId(20L).username("neal_wu").connected(true).build();
+
+        when(accountRepository.findByUserIdAndConnectedTrue(10L)).thenReturn(Optional.of(userA));
+        when(accountRepository.findByUserIdAndConnectedTrue(20L)).thenReturn(Optional.of(userB));
+
+        LeetCodeStatusResponse statusA = leetCodeService.getAccountStatus(10L);
+        LeetCodeStatusResponse statusB = leetCodeService.getAccountStatus(20L);
+
+        assertEquals("atul_yadav", statusA.getUsername());
+        assertEquals("neal_wu", statusB.getUsername());
+        assertNotEquals(statusA.getUsername(), statusB.getUsername());
     }
 
     @Test

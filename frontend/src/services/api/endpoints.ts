@@ -37,6 +37,7 @@ export const ENDPOINTS = {
   DASHBOARD_SUMMARY: '/v1/dashboard/summary',
 
   // LeetCode
+  LEETCODE_CONNECTION: '/v1/leetcode/connection',
   LEETCODE_ME: '/v1/leetcode/me',
   LEETCODE_STATUS: '/v1/leetcode/status',
   LEETCODE_PREVIEW: '/v1/leetcode/preview',
