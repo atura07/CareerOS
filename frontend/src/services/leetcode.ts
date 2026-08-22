@@ -42,7 +42,7 @@ export function generateHeatmapData(): HeatmapDay[] {
  */
 export async function getLeetCodeStatus(): Promise<LeetCodeStatusResponse> {
   try {
-    const response = await httpClient.get<LeetCodeStatusResponse>(ENDPOINTS.LEETCODE_STATUS)
+    const response = await httpClient.get<LeetCodeStatusResponse>(ENDPOINTS.LEETCODE_ME)
     return response.data
   } catch (err: unknown) {
     throw toError(err, 'Failed to retrieve LeetCode connection status.')

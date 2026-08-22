@@ -27,9 +27,9 @@ public class LeetCodeController {
     private final JwtService jwtService;
 
     /**
-     * Get the authenticated user's connected LeetCode status and synced dashboard data.
+     * Get the authenticated user's connected LeetCode status and complete dashboard data.
      */
-    @GetMapping("/status")
+    @GetMapping({"/me", "/status"})
     public ResponseEntity<LeetCodeStatusResponse> getAccountStatus(
             @RequestParam(value = "userId", required = false) Long paramUserId,
             @AuthenticationPrincipal Object principal,
@@ -37,7 +37,7 @@ public class LeetCodeController {
             HttpServletRequest request) {
 
         Long userId = resolveUserId(paramUserId, principal, authentication, request);
-        log.info("GET /api/v1/leetcode/status for userId={}", userId);
+        log.info("GET /api/v1/leetcode/me for userId={}", userId);
         LeetCodeStatusResponse status = leetCodeService.getAccountStatus(userId);
         return ResponseEntity.ok(status);
     }
