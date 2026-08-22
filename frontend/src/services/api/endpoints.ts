@@ -37,6 +37,12 @@ export const ENDPOINTS = {
   DASHBOARD_SUMMARY: '/v1/dashboard/summary',
 
   // LeetCode
-  LEETCODE: (username?: string) => (username ? `/v1/leetcode/${encodeURIComponent(username)}` : '/v1/leetcode'),
+  LEETCODE_STATUS: '/v1/leetcode/status',
+  LEETCODE_PREVIEW: '/v1/leetcode/preview',
+  LEETCODE_CONNECT: '/v1/leetcode/connect',
+  LEETCODE_DISCONNECT: '/v1/leetcode/disconnect',
+  LEETCODE_SYNC: '/v1/leetcode/sync',
+  LEETCODE_PUBLIC: (username: string) => `/v1/leetcode/public/${encodeURIComponent(username)}`,
+  LEETCODE: (username?: string) => (username ? `/v1/leetcode/public/${encodeURIComponent(username)}` : '/v1/leetcode/status'),
 } as const
 

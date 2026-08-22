@@ -2,23 +2,22 @@ import type {
   HeatmapDay,
   LeetCodeData,
   LeetCodeError,
+  LeetCodePreviewResponse,
+  LeetCodeStatusResponse,
 } from '../types/leetcode'
 import { httpClient } from './api/httpClient'
 import { ENDPOINTS } from './api/endpoints'
 
-/** LeetCode username to load. Override via VITE_LEETCODE_USERNAME. */
-export const LEETCODE_USERNAME: string =
-  (import.meta.env.VITE_LEETCODE_USERNAME as string | undefined) ?? 'atul_yadav'
-
 /** Session cache TTL (milliseconds). */
-const CACHE_TTL = 5 * 60 * 1000
+const CACHE_TTL = 3 * 60 * 1000
 
-interface CacheEntry {
-  data: LeetCodeData
+interface CacheEntry<T> {
+  data: T
   expiresAt: number
 }
 
-const cache = new Map<string, CacheEntry>()
+const statusCache = new Map<string, CacheEntry<LeetCodeStatusResponse>>()
+const previewCache = new Map<string, CacheEntry<LeetCodePreviewResponse>>()
 
 /** Deterministic placeholder submission calendar (last 365 days). */
 export function generateHeatmapData(): HeatmapDay[] {
@@ -36,40 +35,105 @@ export function generateHeatmapData(): HeatmapDay[] {
   return days
 }
 
-/* ------------------------------ Data fetching ------------------------------ */
+/* ------------------------------ API Services ------------------------------ */
 
 /**
- * Fetch live LeetCode data for the specified username via our backend API.
- * Eliminates direct browser GraphQL calls and CORS restrictions.
- * Caches the response for the session to avoid redundant network requests.
+ * Get the current authenticated user's LeetCode connection status and synced data.
  */
-export async function fetchLeetCodeData(username: string = LEETCODE_USERNAME): Promise<LeetCodeData> {
-  const target = (username && username.trim().length > 0) ? username.trim() : LEETCODE_USERNAME
-  const now = Date.now()
-  const cached = cache.get(target.toLowerCase())
-  if (cached && cached.expiresAt > now) {
+export async function getLeetCodeStatus(): Promise<LeetCodeStatusResponse> {
+  try {
+    const response = await httpClient.get<LeetCodeStatusResponse>(ENDPOINTS.LEETCODE_STATUS)
+    return response.data
+  } catch (err: unknown) {
+    throw toError(err, 'Failed to retrieve LeetCode connection status.')
+  }
+}
+
+/**
+ * Preview and validate a LeetCode username live before connecting.
+ */
+export async function previewLeetCodeUser(username: string): Promise<LeetCodePreviewResponse> {
+  const clean = username.trim()
+  if (!clean) {
+    return { valid: false, message: 'Please enter a valid LeetCode username.' }
+  }
+
+  const cached = previewCache.get(clean.toLowerCase())
+  if (cached && cached.expiresAt > Date.now()) {
     return cached.data
   }
 
   try {
-    const endpoint = ENDPOINTS.LEETCODE(target)
-    const response = await httpClient.get<LeetCodeData>(endpoint)
-    const data = response.data
-
-    if (!data || !data.profile) {
-      throw new Error('not-found')
-    }
-
-    cache.set(target.toLowerCase(), { data, expiresAt: now + CACHE_TTL })
-    return data
+    const response = await httpClient.post<LeetCodePreviewResponse>(ENDPOINTS.LEETCODE_PREVIEW, {
+      username: clean,
+    })
+    const result = response.data
+    previewCache.set(clean.toLowerCase(), { data: result, expiresAt: Date.now() + CACHE_TTL })
+    return result
   } catch (err: unknown) {
-    throw toError(err, target)
+    throw toError(err, `Failed to verify LeetCode username "${clean}".`)
   }
+}
+
+/**
+ * Connect a LeetCode account for the authenticated user.
+ */
+export async function connectLeetCodeAccount(username: string): Promise<LeetCodeStatusResponse> {
+  const clean = username.trim()
+  try {
+    const response = await httpClient.post<LeetCodeStatusResponse>(ENDPOINTS.LEETCODE_CONNECT, {
+      username: clean,
+    })
+    statusCache.clear()
+    return response.data
+  } catch (err: unknown) {
+    throw toError(err, `Failed to connect LeetCode account "${clean}".`)
+  }
+}
+
+/**
+ * Disconnect the authenticated user's LeetCode account.
+ */
+export async function disconnectLeetCodeAccount(): Promise<void> {
+  try {
+    await httpClient.delete(ENDPOINTS.LEETCODE_DISCONNECT)
+    statusCache.clear()
+  } catch (err: unknown) {
+    throw toError(err, 'Failed to disconnect LeetCode account.')
+  }
+}
+
+/**
+ * Manually trigger a fresh data sync for the user's connected LeetCode account.
+ */
+export async function syncLeetCodeAccount(): Promise<LeetCodeStatusResponse> {
+  try {
+    const response = await httpClient.post<LeetCodeStatusResponse>(ENDPOINTS.LEETCODE_SYNC)
+    statusCache.clear()
+    return response.data
+  } catch (err: unknown) {
+    throw toError(err, 'Failed to sync LeetCode data.')
+  }
+}
+
+/**
+ * Fetch public LeetCode data for a specific username or current status.
+ */
+export async function fetchLeetCodeData(username?: string): Promise<LeetCodeData> {
+  if (username && username.trim()) {
+    const response = await httpClient.get<LeetCodeData>(ENDPOINTS.LEETCODE_PUBLIC(username.trim()))
+    return response.data
+  }
+  const status = await getLeetCodeStatus()
+  if (!status.connected || !status.data) {
+    throw { kind: 'not-found', message: 'No connected LeetCode account found.' } as LeetCodeError
+  }
+  return status.data
 }
 
 /* ------------------------------ Error mapping ------------------------------ */
 
-function toError(err: unknown, username: string): LeetCodeError {
+function toError(err: unknown, defaultMessage: string): LeetCodeError {
   if (typeof err === 'object' && err !== null && 'kind' in err && 'message' in err) {
     return err as LeetCodeError
   }
@@ -85,10 +149,17 @@ function toError(err: unknown, username: string): LeetCodeError {
   const status = axiosError.response?.status
   const backendMsg = axiosError.response?.data?.message || axiosError.response?.data?.error
 
-  if (status === 404 || axiosError.message === 'not-found') {
+  if (status === 401 || status === 403) {
+    return {
+      kind: 'unauthorized',
+      message: backendMsg || 'Please log in to manage your LeetCode integration.',
+    }
+  }
+
+  if (status === 404) {
     return {
       kind: 'not-found',
-      message: backendMsg || `LeetCode user "${username}" was not found.`,
+      message: backendMsg || 'LeetCode profile was not found.',
     }
   }
 
@@ -101,6 +172,6 @@ function toError(err: unknown, username: string): LeetCodeError {
 
   return {
     kind: 'network',
-    message: backendMsg || axiosError.message || 'Unable to load LeetCode data from CareerOS backend.',
+    message: backendMsg || axiosError.message || defaultMessage,
   }
 }

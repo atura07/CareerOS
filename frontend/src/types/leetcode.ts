@@ -51,7 +51,7 @@ export interface HeatmapDay {
   count: number
 }
 
-export type LeetCodeErrorKind = 'not-found' | 'rate-limited' | 'network' | 'unknown'
+export type LeetCodeErrorKind = 'not-found' | 'rate-limited' | 'network' | 'unauthorized' | 'unknown'
 
 export interface LeetCodeError {
   kind: LeetCodeErrorKind
@@ -65,4 +65,30 @@ export interface LeetCodeData {
   recentProblems: RecentProblem[]
   contestHistory: ContestEntry[]
   heatmap: HeatmapDay[]
+}
+
+export interface LeetCodePreviewResponse {
+  valid: boolean
+  username?: string
+  avatar?: string
+  ranking?: number
+  problemsSolved?: number
+  easy?: number
+  medium?: number
+  hard?: number
+  contestRating?: number
+  message?: string
+}
+
+export interface LeetCodeStatusResponse {
+  connected: boolean
+  username?: string | null
+  lastSyncedAt?: string | null
+  lastSyncStatus?: 'SUCCESS' | 'FAILED' | 'PENDING' | string | null
+  lastErrorMessage?: string | null
+  data?: LeetCodeData | null
+}
+
+export interface ConnectLeetCodePayload {
+  username: string
 }

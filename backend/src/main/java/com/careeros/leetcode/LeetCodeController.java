@@ -1,9 +1,17 @@
 package com.careeros.leetcode;
 
+import com.careeros.leetcode.dto.ConnectLeetCodeRequest;
 import com.careeros.leetcode.dto.LeetCodeDataDto;
+import com.careeros.leetcode.dto.LeetCodePreviewResponse;
+import com.careeros.leetcode.dto.LeetCodeStatusResponse;
+import com.careeros.user.User;
+import com.careeros.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -13,19 +21,110 @@ import org.springframework.web.bind.annotation.*;
 public class LeetCodeController {
 
     private final LeetCodeService leetCodeService;
+    private final UserRepository userRepository;
 
-    @GetMapping("/{username}")
-    public ResponseEntity<LeetCodeDataDto> getLeetCodeProfile(@PathVariable String username) {
-        log.info("Fetching LeetCode data for username: {}", username);
-        LeetCodeDataDto data = leetCodeService.getLeetCodeData(username);
+    /**
+     * Get the authenticated user's connected LeetCode status and synced dashboard data.
+     */
+    @GetMapping("/status")
+    public ResponseEntity<LeetCodeStatusResponse> getAccountStatus(
+            @RequestParam(value = "userId", required = false) Long paramUserId,
+            @AuthenticationPrincipal Object principal,
+            Authentication authentication) {
+
+        Long userId = resolveUserId(paramUserId, principal, authentication);
+        log.info("GET /api/v1/leetcode/status for userId={}", userId);
+        LeetCodeStatusResponse status = leetCodeService.getAccountStatus(userId);
+        return ResponseEntity.ok(status);
+    }
+
+    /**
+     * Preview and validate a LeetCode username before connecting.
+     */
+    @PostMapping("/preview")
+    public ResponseEntity<LeetCodePreviewResponse> previewLeetCodeUser(
+            @RequestBody ConnectLeetCodeRequest request) {
+
+        log.info("POST /api/v1/leetcode/preview for username={}", request != null ? request.getUsername() : null);
+        String username = request != null ? request.getUsername() : "";
+        LeetCodePreviewResponse preview = leetCodeService.previewLeetCodeUser(username);
+        return ResponseEntity.ok(preview);
+    }
+
+    /**
+     * Connect or update a LeetCode account for the authenticated user.
+     */
+    @PostMapping("/connect")
+    public ResponseEntity<LeetCodeStatusResponse> connectAccount(
+            @RequestBody ConnectLeetCodeRequest request,
+            @RequestParam(value = "userId", required = false) Long paramUserId,
+            @AuthenticationPrincipal Object principal,
+            Authentication authentication) {
+
+        Long userId = resolveUserId(paramUserId, principal, authentication);
+        String username = request != null ? request.getUsername() : "";
+        log.info("POST /api/v1/leetcode/connect for userId={}, username={}", userId, username);
+
+        LeetCodeStatusResponse status = leetCodeService.connectAccount(userId, username);
+        return ResponseEntity.ok(status);
+    }
+
+    /**
+     * Disconnect the authenticated user's LeetCode account.
+     */
+    @DeleteMapping("/disconnect")
+    public ResponseEntity<Void> disconnectAccount(
+            @RequestParam(value = "userId", required = false) Long paramUserId,
+            @AuthenticationPrincipal Object principal,
+            Authentication authentication) {
+
+        Long userId = resolveUserId(paramUserId, principal, authentication);
+        log.info("DELETE /api/v1/leetcode/disconnect for userId={}", userId);
+
+        leetCodeService.disconnectAccount(userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Manually trigger a fresh sync for the authenticated user's LeetCode data.
+     */
+    @PostMapping("/sync")
+    public ResponseEntity<LeetCodeStatusResponse> syncAccountData(
+            @RequestParam(value = "userId", required = false) Long paramUserId,
+            @AuthenticationPrincipal Object principal,
+            Authentication authentication) {
+
+        Long userId = resolveUserId(paramUserId, principal, authentication);
+        log.info("POST /api/v1/leetcode/sync for userId={}", userId);
+
+        LeetCodeStatusResponse status = leetCodeService.syncAccountData(userId);
+        return ResponseEntity.ok(status);
+    }
+
+    /**
+     * Public endpoint for testing or querying any public LeetCode user profile directly.
+     */
+    @GetMapping("/public/{username}")
+    public ResponseEntity<LeetCodeDataDto> getPublicProfile(@PathVariable String username) {
+        log.info("GET /api/v1/leetcode/public/{}", username);
+        LeetCodeDataDto data = leetCodeService.fetchRawLeetCodeData(username);
         return ResponseEntity.ok(data);
     }
 
-    @GetMapping
-    public ResponseEntity<LeetCodeDataDto> getLeetCodeDefault(@RequestParam(required = false) String username) {
-        String target = (username == null || username.isBlank()) ? "atul_yadav" : username;
-        log.info("Fetching LeetCode default data for: {}", target);
-        LeetCodeDataDto data = leetCodeService.getLeetCodeData(target);
-        return ResponseEntity.ok(data);
+    private Long resolveUserId(Long paramUserId, Object principal, Authentication authentication) {
+        if (principal instanceof User user) {
+            return user.getId();
+        }
+        if (principal instanceof UserDetails userDetails) {
+            return userRepository.findByEmail(userDetails.getUsername())
+                    .map(User::getId)
+                    .orElse(paramUserId != null ? paramUserId : 1L);
+        }
+        if (authentication != null && authentication.getName() != null && !authentication.getName().equals("anonymousUser")) {
+            return userRepository.findByEmail(authentication.getName())
+                    .map(User::getId)
+                    .orElse(paramUserId != null ? paramUserId : 1L);
+        }
+        return paramUserId != null ? paramUserId : 1L;
     }
 }

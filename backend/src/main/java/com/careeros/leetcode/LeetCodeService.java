@@ -2,10 +2,13 @@ package com.careeros.leetcode;
 
 import com.careeros.exception.ResourceNotFoundException;
 import com.careeros.leetcode.dto.LeetCodeDataDto;
+import com.careeros.leetcode.dto.LeetCodePreviewResponse;
+import com.careeros.leetcode.dto.LeetCodeStatusResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -14,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -28,10 +32,13 @@ public class LeetCodeService {
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final LeetCodeAccountRepository accountRepository;
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
+    private final Set<Long> activeSyncs = ConcurrentHashMap.newKeySet();
 
-    public LeetCodeService(ObjectMapper objectMapper) {
+    public LeetCodeService(ObjectMapper objectMapper, LeetCodeAccountRepository accountRepository) {
         this.objectMapper = objectMapper;
+        this.accountRepository = accountRepository;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(6))
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -140,16 +147,234 @@ public class LeetCodeService {
         }
     """;
 
-    public LeetCodeDataDto getLeetCodeData(String rawUsername) {
-        String username = (rawUsername == null || rawUsername.isBlank()) ? "atul_yadav" : rawUsername.trim();
+    /**
+     * Preview a LeetCode user without connecting.
+     */
+    public LeetCodePreviewResponse previewLeetCodeUser(String rawUsername) {
+        if (rawUsername == null || rawUsername.isBlank()) {
+            return LeetCodePreviewResponse.builder()
+                    .valid(false)
+                    .message("Username cannot be empty.")
+                    .build();
+        }
+        String cleanUsername = rawUsername.trim();
+
+        try {
+            LeetCodeDataDto data = fetchRawLeetCodeData(cleanUsername);
+            return LeetCodePreviewResponse.builder()
+                    .valid(true)
+                    .username(data.getProfile().getUsername())
+                    .avatar(data.getProfile().getAvatar())
+                    .ranking(data.getProfile().getRanking())
+                    .problemsSolved(data.getStats().getProblemsSolved())
+                    .easy(data.getStats().getEasy())
+                    .medium(data.getStats().getMedium())
+                    .hard(data.getStats().getHard())
+                    .contestRating(data.getStats().getContestRating())
+                    .message("LeetCode profile found!")
+                    .build();
+        } catch (ResourceNotFoundException e) {
+            return LeetCodePreviewResponse.builder()
+                    .valid(false)
+                    .username(cleanUsername)
+                    .message("LeetCode user \"" + cleanUsername + "\" does not exist.")
+                    .build();
+        } catch (Exception e) {
+            log.error("Error previewing LeetCode user {}: {}", cleanUsername, e.getMessage());
+            return LeetCodePreviewResponse.builder()
+                    .valid(false)
+                    .username(cleanUsername)
+                    .message("Unable to verify LeetCode profile: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    /**
+     * Get connected LeetCode status and dashboard data for a specific user.
+     */
+    public LeetCodeStatusResponse getAccountStatus(Long userId) {
+        Optional<LeetCodeAccountEntity> optionalAccount = accountRepository.findByUserIdAndConnectedTrue(userId);
+        if (optionalAccount.isEmpty()) {
+            return LeetCodeStatusResponse.builder()
+                    .connected(false)
+                    .build();
+        }
+
+        LeetCodeAccountEntity account = optionalAccount.get();
+        LeetCodeDataDto data = null;
+
+        if (account.getSyncedDataJson() != null && !account.getSyncedDataJson().isBlank()) {
+            try {
+                data = objectMapper.readValue(account.getSyncedDataJson(), LeetCodeDataDto.class);
+            } catch (Exception e) {
+                log.warn("Failed to parse cached LeetCode data for user {}: {}", userId, e.getMessage());
+            }
+        }
+
+        if (data == null) {
+            try {
+                data = fetchRawLeetCodeData(account.getUsername());
+                account.setSyncedDataJson(objectMapper.writeValueAsString(data));
+                account.setLastSyncedAt(LocalDateTime.now());
+                account.setLastSyncStatus("SUCCESS");
+                account.setLastErrorMessage(null);
+                accountRepository.save(account);
+            } catch (Exception e) {
+                log.error("Failed initial data fetch for user {}: {}", userId, e.getMessage());
+            }
+        }
+
+        return LeetCodeStatusResponse.builder()
+                .connected(true)
+                .username(account.getUsername())
+                .lastSyncedAt(account.getLastSyncedAt())
+                .lastSyncStatus(account.getLastSyncStatus())
+                .lastErrorMessage(account.getLastErrorMessage())
+                .data(data)
+                .build();
+    }
+
+    /**
+     * Connect or update a LeetCode username for a specific user.
+     */
+    @Transactional
+    public LeetCodeStatusResponse connectAccount(Long userId, String rawUsername) {
+        if (rawUsername == null || rawUsername.isBlank()) {
+            throw new IllegalArgumentException("LeetCode username cannot be blank.");
+        }
+        String cleanUsername = rawUsername.trim();
+
+        // 1. Verify existence and fetch initial data
+        LeetCodeDataDto data = fetchRawLeetCodeData(cleanUsername);
+
+        // 2. Persist in database
+        LeetCodeAccountEntity account = accountRepository.findByUserId(userId)
+                .orElse(LeetCodeAccountEntity.builder()
+                        .userId(userId)
+                        .build());
+
+        account.setUsername(data.getProfile().getUsername());
+        account.setConnected(true);
+        account.setLastSyncedAt(LocalDateTime.now());
+        account.setLastSyncStatus("SUCCESS");
+        account.setLastErrorMessage(null);
+
+        try {
+            account.setSyncedDataJson(objectMapper.writeValueAsString(data));
+        } catch (Exception e) {
+            log.warn("Could not serialize LeetCode data for persistence: {}", e.getMessage());
+        }
+
+        accountRepository.save(account);
+        log.info("Successfully connected LeetCode account '{}' for userId={}", cleanUsername, userId);
+
+        return LeetCodeStatusResponse.builder()
+                .connected(true)
+                .username(account.getUsername())
+                .lastSyncedAt(account.getLastSyncedAt())
+                .lastSyncStatus(account.getLastSyncStatus())
+                .lastErrorMessage(null)
+                .data(data)
+                .build();
+    }
+
+    /**
+     * Disconnect LeetCode account for a user.
+     */
+    @Transactional
+    public void disconnectAccount(Long userId) {
+        accountRepository.findByUserId(userId).ifPresent(account -> {
+            account.setConnected(false);
+            accountRepository.save(account);
+            log.info("Disconnected LeetCode account for userId={}", userId);
+        });
+    }
+
+    /**
+     * Manually trigger sync for a user's connected LeetCode account.
+     */
+    public LeetCodeStatusResponse syncAccountData(Long userId) {
+        LeetCodeAccountEntity account = accountRepository.findByUserIdAndConnectedTrue(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("No connected LeetCode account found for this user."));
+
+        if (!activeSyncs.add(userId)) {
+            log.info("Sync already in progress for userId={}", userId);
+            return getAccountStatus(userId);
+        }
+
+        try {
+            // Bypass memory cache during explicit manual sync
+            LeetCodeDataDto freshData = fetchFromLeetCodeGraphQL(account.getUsername());
+
+            account.setLastSyncedAt(LocalDateTime.now());
+            account.setLastSyncStatus("SUCCESS");
+            account.setLastErrorMessage(null);
+            account.setSyncedDataJson(objectMapper.writeValueAsString(freshData));
+            accountRepository.save(account);
+
+            // Update memory cache
+            cache.put(account.getUsername().toLowerCase(), new CacheEntry(freshData, System.currentTimeMillis() + CACHE_TTL_MILLIS));
+
+            return LeetCodeStatusResponse.builder()
+                    .connected(true)
+                    .username(account.getUsername())
+                    .lastSyncedAt(account.getLastSyncedAt())
+                    .lastSyncStatus("SUCCESS")
+                    .lastErrorMessage(null)
+                    .data(freshData)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Sync failed for userId={} (username={}): {}", userId, account.getUsername(), e.getMessage());
+
+            account.setLastSyncStatus("FAILED");
+            account.setLastErrorMessage(e.getMessage());
+            accountRepository.save(account);
+
+            // Fallback to existing cached data in DB
+            LeetCodeDataDto existingData = null;
+            if (account.getSyncedDataJson() != null && !account.getSyncedDataJson().isBlank()) {
+                try {
+                    existingData = objectMapper.readValue(account.getSyncedDataJson(), LeetCodeDataDto.class);
+                } catch (Exception parseEx) {
+                    log.error("Failed to parse fallback cached data: {}", parseEx.getMessage());
+                }
+            }
+
+            return LeetCodeStatusResponse.builder()
+                    .connected(true)
+                    .username(account.getUsername())
+                    .lastSyncedAt(account.getLastSyncedAt())
+                    .lastSyncStatus("FAILED")
+                    .lastErrorMessage(e.getMessage())
+                    .data(existingData)
+                    .build();
+        } finally {
+            activeSyncs.remove(userId);
+        }
+    }
+
+    /**
+     * Public / Direct fetch with memory cache.
+     */
+    public LeetCodeDataDto fetchRawLeetCodeData(String username) {
+        String cleanUsername = (username == null || username.isBlank()) ? "" : username.trim();
+        if (cleanUsername.isEmpty()) {
+            throw new IllegalArgumentException("Username cannot be empty");
+        }
 
         long now = System.currentTimeMillis();
-        CacheEntry cached = cache.get(username.toLowerCase());
+        CacheEntry cached = cache.get(cleanUsername.toLowerCase());
         if (cached != null && cached.expiresAt > now) {
-            log.debug("Serving LeetCode data for {} from cache", username);
             return cached.data;
         }
 
+        LeetCodeDataDto freshData = fetchFromLeetCodeGraphQL(cleanUsername);
+        cache.put(cleanUsername.toLowerCase(), new CacheEntry(freshData, now + CACHE_TTL_MILLIS));
+        return freshData;
+    }
+
+    private LeetCodeDataDto fetchFromLeetCodeGraphQL(String username) {
         try {
             Map<String, Object> bodyMap = new HashMap<>();
             bodyMap.put("query", LEETCODE_GRAPHQL_QUERY);
@@ -171,7 +396,6 @@ public class LeetCodeService {
 
             if (response.statusCode() != 200) {
                 log.warn("LeetCode GraphQL returned HTTP {} for user {}", response.statusCode(), username);
-                if (cached != null) return cached.data; // Return stale cache if available
                 throw new RuntimeException("LeetCode API returned HTTP " + response.statusCode());
             }
 
@@ -183,19 +407,12 @@ public class LeetCodeService {
                 throw new ResourceNotFoundException("LeetCode user \"" + username + "\" was not found.");
             }
 
-            LeetCodeDataDto dto = mapToDto(username, dataNode);
-
-            cache.put(username.toLowerCase(), new CacheEntry(dto, now + CACHE_TTL_MILLIS));
-            return dto;
+            return mapToDto(username, dataNode);
 
         } catch (ResourceNotFoundException e) {
             throw e;
         } catch (Exception e) {
             log.error("Failed to fetch LeetCode data for user {}: {}", username, e.getMessage());
-            if (cached != null) {
-                log.warn("Returning stale cache for {} after error", username);
-                return cached.data;
-            }
             throw new RuntimeException("Unable to reach LeetCode API: " + e.getMessage(), e);
         }
     }
@@ -334,6 +551,7 @@ public class LeetCodeService {
             }
         }
 
+        // Heatmap
         List<LeetCodeDataDto.HeatmapDay> heatmap = new ArrayList<>();
         String submissionCalendarJson = calendarNode.path("submissionCalendar").asText("");
         if (submissionCalendarJson != null && !submissionCalendarJson.isBlank() && !"{}".equals(submissionCalendarJson.trim())) {
@@ -349,7 +567,7 @@ public class LeetCodeService {
                 }
                 heatmap.sort(Comparator.comparing(LeetCodeDataDto.HeatmapDay::getDate));
             } catch (Exception e) {
-                log.debug("Could not parse submissionCalendar JSON, falling back: {}", e.getMessage());
+                log.debug("Could not parse submissionCalendar JSON: {}", e.getMessage());
             }
         }
 

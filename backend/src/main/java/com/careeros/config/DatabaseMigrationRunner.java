@@ -314,6 +314,21 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
             ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS evidence_json TEXT;
             ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS quick_wins_json TEXT;
             ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS score_label VARCHAR(50);
+
+            -- 10. User LeetCode accounts
+            CREATE TABLE IF NOT EXISTS user_leetcode_accounts (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL UNIQUE,
+                username VARCHAR(255) NOT NULL,
+                connected BOOLEAN NOT NULL DEFAULT TRUE,
+                last_synced_at TIMESTAMP,
+                last_sync_status VARCHAR(50) DEFAULT 'SUCCESS',
+                last_error_message TEXT,
+                synced_data_json TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_user_leetcode_accounts_user_id ON user_leetcode_accounts(user_id);
         """;
 
         try (Connection conn = dataSource.getConnection();
@@ -379,7 +394,9 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
             "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS preferred_skills_score INT",
             "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS evidence_json TEXT",
             "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS quick_wins_json TEXT",
-            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS score_label VARCHAR(50)"
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS score_label VARCHAR(50)",
+            "CREATE TABLE IF NOT EXISTS user_leetcode_accounts (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL UNIQUE, username VARCHAR(255) NOT NULL, connected BOOLEAN NOT NULL DEFAULT TRUE, last_synced_at TIMESTAMP, last_sync_status VARCHAR(50) DEFAULT 'SUCCESS', last_error_message TEXT, synced_data_json TEXT, created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP NOT NULL DEFAULT NOW())",
+            "CREATE INDEX IF NOT EXISTS idx_user_leetcode_accounts_user_id ON user_leetcode_accounts(user_id)"
         };
 
         try (Connection conn = dataSource.getConnection();

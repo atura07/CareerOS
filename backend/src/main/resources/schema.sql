@@ -144,3 +144,19 @@ CREATE TABLE IF NOT EXISTS interview_reports (
     next_preparation_actions TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- User LeetCode Integration Table
+CREATE TABLE IF NOT EXISTS user_leetcode_accounts (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL UNIQUE,
+    username VARCHAR(255) NOT NULL,
+    connected BOOLEAN NOT NULL DEFAULT TRUE,
+    last_synced_at TIMESTAMP,
+    last_sync_status VARCHAR(50) DEFAULT 'SUCCESS',
+    last_error_message TEXT,
+    synced_data_json TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_leetcode_accounts_user_id ON user_leetcode_accounts(user_id);
