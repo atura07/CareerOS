@@ -1,5 +1,6 @@
 package com.careeros.leetcode;
 
+import com.careeros.jwt.JwtService;
 import com.careeros.leetcode.dto.ConnectLeetCodeRequest;
 import com.careeros.leetcode.dto.LeetCodeDataDto;
 import com.careeros.leetcode.dto.LeetCodePreviewResponse;
@@ -26,6 +27,9 @@ class LeetCodeControllerTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private JwtService jwtService;
+
     @InjectMocks
     private LeetCodeController leetCodeController;
 
@@ -49,7 +53,7 @@ class LeetCodeControllerTest {
 
         when(leetCodeService.getAccountStatus(10L)).thenReturn(mockStatus);
 
-        ResponseEntity<LeetCodeStatusResponse> response = leetCodeController.getAccountStatus(null, mockUser, null);
+        ResponseEntity<LeetCodeStatusResponse> response = leetCodeController.getAccountStatus(null, mockUser, null, null);
 
         assertNotNull(response);
         assertEquals(200, response.getStatusCode().value());
@@ -89,7 +93,7 @@ class LeetCodeControllerTest {
         when(leetCodeService.connectAccount(10L, "atul_yadav")).thenReturn(mockStatus);
 
         ConnectLeetCodeRequest req = ConnectLeetCodeRequest.builder().username("atul_yadav").build();
-        ResponseEntity<LeetCodeStatusResponse> response = leetCodeController.connectAccount(req, null, mockUser, null);
+        ResponseEntity<LeetCodeStatusResponse> response = leetCodeController.connectAccount(req, null, mockUser, null, null);
 
         assertNotNull(response);
         assertEquals(200, response.getStatusCode().value());
@@ -101,7 +105,7 @@ class LeetCodeControllerTest {
     void testDisconnectAccount() {
         doNothing().when(leetCodeService).disconnectAccount(10L);
 
-        ResponseEntity<Void> response = leetCodeController.disconnectAccount(null, mockUser, null);
+        ResponseEntity<Void> response = leetCodeController.disconnectAccount(null, mockUser, null, null);
 
         assertNotNull(response);
         assertEquals(204, response.getStatusCode().value());
@@ -118,7 +122,7 @@ class LeetCodeControllerTest {
 
         when(leetCodeService.syncAccountData(10L)).thenReturn(mockStatus);
 
-        ResponseEntity<LeetCodeStatusResponse> response = leetCodeController.syncAccountData(null, mockUser, null);
+        ResponseEntity<LeetCodeStatusResponse> response = leetCodeController.syncAccountData(null, mockUser, null, null);
 
         assertNotNull(response);
         assertEquals(200, response.getStatusCode().value());

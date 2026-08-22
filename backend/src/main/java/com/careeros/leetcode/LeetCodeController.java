@@ -1,11 +1,13 @@
 package com.careeros.leetcode;
 
+import com.careeros.jwt.JwtService;
 import com.careeros.leetcode.dto.ConnectLeetCodeRequest;
 import com.careeros.leetcode.dto.LeetCodeDataDto;
 import com.careeros.leetcode.dto.LeetCodePreviewResponse;
 import com.careeros.leetcode.dto.LeetCodeStatusResponse;
 import com.careeros.user.User;
 import com.careeros.user.UserRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +24,7 @@ public class LeetCodeController {
 
     private final LeetCodeService leetCodeService;
     private final UserRepository userRepository;
+    private final JwtService jwtService;
 
     /**
      * Get the authenticated user's connected LeetCode status and synced dashboard data.
@@ -30,9 +33,10 @@ public class LeetCodeController {
     public ResponseEntity<LeetCodeStatusResponse> getAccountStatus(
             @RequestParam(value = "userId", required = false) Long paramUserId,
             @AuthenticationPrincipal Object principal,
-            Authentication authentication) {
+            Authentication authentication,
+            HttpServletRequest request) {
 
-        Long userId = resolveUserId(paramUserId, principal, authentication);
+        Long userId = resolveUserId(paramUserId, principal, authentication, request);
         log.info("GET /api/v1/leetcode/status for userId={}", userId);
         LeetCodeStatusResponse status = leetCodeService.getAccountStatus(userId);
         return ResponseEntity.ok(status);
@@ -59,9 +63,10 @@ public class LeetCodeController {
             @RequestBody ConnectLeetCodeRequest request,
             @RequestParam(value = "userId", required = false) Long paramUserId,
             @AuthenticationPrincipal Object principal,
-            Authentication authentication) {
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
 
-        Long userId = resolveUserId(paramUserId, principal, authentication);
+        Long userId = resolveUserId(paramUserId, principal, authentication, httpRequest);
         String username = request != null ? request.getUsername() : "";
         log.info("POST /api/v1/leetcode/connect for userId={}, username={}", userId, username);
 
@@ -76,9 +81,10 @@ public class LeetCodeController {
     public ResponseEntity<Void> disconnectAccount(
             @RequestParam(value = "userId", required = false) Long paramUserId,
             @AuthenticationPrincipal Object principal,
-            Authentication authentication) {
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
 
-        Long userId = resolveUserId(paramUserId, principal, authentication);
+        Long userId = resolveUserId(paramUserId, principal, authentication, httpRequest);
         log.info("DELETE /api/v1/leetcode/disconnect for userId={}", userId);
 
         leetCodeService.disconnectAccount(userId);
@@ -92,9 +98,10 @@ public class LeetCodeController {
     public ResponseEntity<LeetCodeStatusResponse> syncAccountData(
             @RequestParam(value = "userId", required = false) Long paramUserId,
             @AuthenticationPrincipal Object principal,
-            Authentication authentication) {
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
 
-        Long userId = resolveUserId(paramUserId, principal, authentication);
+        Long userId = resolveUserId(paramUserId, principal, authentication, httpRequest);
         log.info("POST /api/v1/leetcode/sync for userId={}", userId);
 
         LeetCodeStatusResponse status = leetCodeService.syncAccountData(userId);
@@ -111,7 +118,7 @@ public class LeetCodeController {
         return ResponseEntity.ok(data);
     }
 
-    private Long resolveUserId(Long paramUserId, Object principal, Authentication authentication) {
+    private Long resolveUserId(Long paramUserId, Object principal, Authentication authentication, HttpServletRequest request) {
         if (principal instanceof User user) {
             return user.getId();
         }
@@ -120,6 +127,15 @@ public class LeetCodeController {
             email = userDetails.getUsername();
         } else if (authentication != null && authentication.getName() != null && !authentication.getName().equals("anonymousUser")) {
             email = authentication.getName();
+        }
+
+        if ((email == null || email.isBlank()) && request != null) {
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                try {
+                    email = jwtService.extractUsername(authHeader.substring(7));
+                } catch (Exception ignored) {}
+            }
         }
 
         if (email != null && !email.isBlank()) {
