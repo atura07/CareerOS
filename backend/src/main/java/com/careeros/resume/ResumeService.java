@@ -68,18 +68,40 @@ public class ResumeService {
             extractedText = "";
         }
 
-        // 4. Save entity to database
-        ResumeEntity entity = new ResumeEntity(
-                userId,
-                metadata.getOriginalFileName(),
-                metadata.getStoredFileName(),
-                metadata.getFileSize(),
-                metadata.getFileType()
-        );
-        entity.setExtractedText(extractedText);
+        // 4. Check if resume with same file name already exists for this user
+        List<ResumeEntity> existingResumes = resumeRepository.findByUserIdOrderByUploadDateDesc(userId);
+        ResumeEntity entity = null;
+        for (ResumeEntity r : existingResumes) {
+            if (r.getOriginalFileName().equalsIgnoreCase(metadata.getOriginalFileName())) {
+                entity = r;
+                break;
+            }
+        }
+
+        if (entity != null) {
+            if (!entity.getStoredFileName().equals(metadata.getStoredFileName())) {
+                try {
+                    storageService.deleteFile(entity.getStoredFileName());
+                } catch (IOException ignored) {}
+            }
+            entity.setStoredFileName(metadata.getStoredFileName());
+            entity.setFileSize(metadata.getFileSize());
+            entity.setFileType(metadata.getFileType());
+            entity.setExtractedText(extractedText);
+            entity.setUploadDate(java.time.LocalDateTime.now());
+        } else {
+            entity = new ResumeEntity(
+                    userId,
+                    metadata.getOriginalFileName(),
+                    metadata.getStoredFileName(),
+                    metadata.getFileSize(),
+                    metadata.getFileType()
+            );
+            entity.setExtractedText(extractedText);
+        }
 
         ResumeEntity saved = resumeRepository.save(entity);
-        log.info("Resume uploaded successfully: id={}, userId={}, file={}",
+        log.info("Resume saved successfully: id={}, userId={}, file={}",
                 saved.getId(), userId, saved.getOriginalFileName());
 
         return ResumeResponse.fromEntity(saved);
@@ -125,7 +147,12 @@ public class ResumeService {
      */
     @Transactional(readOnly = true)
     public List<ResumeResponse> getUserResumes(Long userId) {
-        return resumeRepository.findByUserIdOrderByUploadDateDesc(userId)
+        List<ResumeEntity> list = resumeRepository.findByUserIdOrderByUploadDateDesc(userId);
+        java.util.Map<Long, ResumeEntity> uniqueById = new java.util.LinkedHashMap<>();
+        for (ResumeEntity r : list) {
+            uniqueById.putIfAbsent(r.getId(), r);
+        }
+        return uniqueById.values()
                 .stream()
                 .map(ResumeResponse::fromEntity)
                 .toList();

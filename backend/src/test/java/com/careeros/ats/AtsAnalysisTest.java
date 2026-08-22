@@ -254,4 +254,77 @@ class AtsAnalysisTest {
         assertEquals(2, suggestions.size());
         assertEquals("Add measurable metrics to projects.", suggestions.get(0));
     }
+
+    @Test
+    void testGetUniversalIntelligence_WithSpacedRoleAndNullHistory_Succeeds() {
+        ResumeEntity resume = new ResumeEntity();
+        resume.setId(2L);
+        resume.setUserId(100L);
+        resume.setFileType("pdf");
+        resume.setExtractedText(STRONG_RESUME_TEXT);
+
+        when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume));
+        when(resumeService.healExtractedTextIfNecessary(any())).thenReturn(resume);
+        when(atsAnalysisRepository.findTop2ByResumeIdAndAnalysisModeOrderByCreatedAtDesc(2L, "UNIVERSAL"))
+                .thenReturn(List.of());
+
+        AtsAnalysisEntity savedMock = AtsAnalysisEntity.builder()
+                .id(55L)
+                .resumeId(2L)
+                .userId(100L)
+                .overallScore(88)
+                .scoreLabel("Strong")
+                .createdAt(LocalDateTime.now())
+                .build();
+        when(atsAnalysisRepository.save(any(AtsAnalysisEntity.class))).thenReturn(savedMock);
+
+        var result = atsService.getUniversalIntelligence(2L, 100L, "Software Engineer");
+
+        assertNotNull(result);
+        assertEquals("55", result.getAnalysisId());
+        assertEquals(2L, result.getResumeId());
+        assertEquals("Software Engineer", result.getTargetRole());
+        assertTrue(result.getOverallScore() >= 75);
+    }
+
+    @Test
+    void testGetResumeAnalysisHistory_WhenEmpty_ReturnsEmptyList() {
+        ResumeEntity resume = new ResumeEntity();
+        resume.setId(2L);
+        resume.setUserId(100L);
+        resume.setExtractedText(STRONG_RESUME_TEXT);
+
+        when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume));
+        when(atsAnalysisRepository.findByResumeIdOrderByCreatedAtDesc(2L)).thenReturn(List.of());
+
+        var history = atsService.getResumeAnalysisHistory(2L, 100L);
+
+        assertNotNull(history);
+        assertTrue(history.isEmpty());
+    }
+
+    @Test
+    void testGetResumeAnalysisHistory_WithNullFieldEntities_MapsGracefully() {
+        ResumeEntity resume = new ResumeEntity();
+        resume.setId(2L);
+        resume.setUserId(100L);
+        resume.setExtractedText(STRONG_RESUME_TEXT);
+
+        when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume));
+
+        AtsAnalysisEntity legacyEntity = new AtsAnalysisEntity();
+        legacyEntity.setId(10L);
+        legacyEntity.setResumeId(2L);
+        legacyEntity.setUserId(100L);
+        legacyEntity.setAnalysisMode("UNIVERSAL");
+        // All score and string fields are null
+        when(atsAnalysisRepository.findByResumeIdOrderByCreatedAtDesc(2L)).thenReturn(List.of(legacyEntity));
+
+        var history = atsService.getResumeAnalysisHistory(2L, 100L);
+
+        assertNotNull(history);
+        assertEquals(1, history.size());
+        assertEquals(0, history.get(0).getOverallScore());
+        assertEquals("Standard", history.get(0).getScoreLabel());
+    }
 }

@@ -363,7 +363,21 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
             "CREATE TABLE IF NOT EXISTS ats_analyses (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, resume_id BIGINT NOT NULL REFERENCES resumes(id) ON DELETE CASCADE, analysis_mode VARCHAR(50) NOT NULL, job_title VARCHAR(255), company_name VARCHAR(255), job_description_hash VARCHAR(64), overall_score INT, job_match_score INT, completeness_score INT, ats_compatibility_score INT, skills_score INT, experience_score INT, impact_score INT, language_score INT, required_skills_score INT, keyword_score INT, responsibility_score INT, eligibility_score INT, semantic_score INT, matched_skills_json TEXT, missing_skills_json TEXT, additional_skills_json TEXT, matched_keywords_json TEXT, missing_keywords_json TEXT, breakdown_json TEXT, strengths_json TEXT, improvements_json TEXT, warnings_json TEXT, summary TEXT, created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP NOT NULL DEFAULT NOW())",
             "CREATE INDEX IF NOT EXISTS idx_ats_analyses_user_id ON ats_analyses(user_id)",
             "CREATE INDEX IF NOT EXISTS idx_ats_analyses_resume_id ON ats_analyses(resume_id)",
-            "CREATE INDEX IF NOT EXISTS idx_ats_analyses_lookup ON ats_analyses(resume_id, analysis_mode, job_description_hash)"
+            "CREATE INDEX IF NOT EXISTS idx_ats_analyses_lookup ON ats_analyses(resume_id, analysis_mode, job_description_hash)",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS extraction_status VARCHAR(50)",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS extraction_method VARCHAR(50)",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS extraction_confidence DOUBLE PRECISION",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS target_role VARCHAR(100)",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS analysis_status VARCHAR(50)",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS confidence_score INT",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS parsability_score INT",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS contact_score INT",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS readability_score INT",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS achievements_score INT",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS preferred_skills_score INT",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS evidence_json TEXT",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS quick_wins_json TEXT",
+            "ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS score_label VARCHAR(50)"
         };
 
         try (Connection conn = dataSource.getConnection();

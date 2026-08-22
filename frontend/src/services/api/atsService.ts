@@ -166,7 +166,7 @@ export async function getUniversalIntelligence(
   targetRole: string = 'Software Engineer'
 ): Promise<AtsIntelligenceResponse> {
   const res = await httpClient.get<AtsIntelligenceResponse>(
-    `/api/v1/ats/resumes/${resumeId}/intelligence`,
+    `/v1/ats/resumes/${resumeId}/intelligence`,
     { params: { targetRole } }
   )
   return res.data
@@ -180,7 +180,7 @@ export async function analyzeJobMatchIntelligence(
   payload: AtsJobAnalysisRequest
 ): Promise<AtsIntelligenceResponse> {
   const res = await httpClient.post<AtsIntelligenceResponse>(
-    `/api/v1/ats/resumes/${resumeId}/job-match`,
+    `/v1/ats/resumes/${resumeId}/job-match`,
     payload
   )
   return res.data
@@ -193,7 +193,7 @@ export async function improveBullet(
   payload: BulletImprovementRequest
 ): Promise<BulletImprovementResponse> {
   const res = await httpClient.post<BulletImprovementResponse>(
-    '/api/v1/ats/bullet/improve',
+    '/v1/ats/bullet/improve',
     payload
   )
   return res.data
@@ -206,7 +206,7 @@ export async function getResumeAnalysisHistory(
   resumeId: number
 ): Promise<AtsIntelligenceResponse[]> {
   const res = await httpClient.get<AtsIntelligenceResponse[]>(
-    `/api/v1/ats/resumes/${resumeId}/history`
+    `/v1/ats/resumes/${resumeId}/history`
   )
   return res.data
 }
@@ -216,7 +216,7 @@ export async function getResumeAnalysisHistory(
  */
 export async function getOverallAts(resumeId: number): Promise<AtsDetailedResponse> {
   const res = await httpClient.get<AtsDetailedResponse>(
-    `/api/v1/ats/resumes/${resumeId}/overall`
+    `/v1/ats/resumes/${resumeId}/overall`
   )
   return res.data
 }
@@ -229,7 +229,7 @@ export async function analyzeJobMatch(
   payload: AtsJobAnalysisRequest
 ): Promise<AtsDetailedResponse> {
   const res = await httpClient.post<AtsDetailedResponse>(
-    `/api/v1/ats/resumes/${resumeId}/analyze-job`,
+    `/v1/ats/resumes/${resumeId}/analyze-job`,
     payload
   )
   return res.data
@@ -239,7 +239,7 @@ export async function analyzeJobMatch(
  * Legacy single-text ATS check.
  */
 export async function analyzeText(text: string): Promise<AtsResponse> {
-  const res = await httpClient.post<AtsResponse>('/api/v1/ats/analyze/text', { text })
+  const res = await httpClient.post<AtsResponse>('/v1/ats/analyze/text', { text })
   return res.data
 }
 
@@ -247,7 +247,7 @@ export async function analyzeText(text: string): Promise<AtsResponse> {
  * Legacy resume analysis by ID.
  */
 export async function analyzeResumeById(resumeId: number, userId?: number): Promise<AtsResponse> {
-  const res = await httpClient.get<AtsResponse>(`/api/v1/ats/analyze/${resumeId}`, {
+  const res = await httpClient.get<AtsResponse>(`/v1/ats/analyze/${resumeId}`, {
     params: userId ? { userId } : undefined,
   })
   return res.data
@@ -260,7 +260,7 @@ export async function analyzeResumeAgainstJobDescription(
   resumeId: number,
   jobDescription: string
 ): Promise<ATSAnalysisResponse> {
-  const res = await httpClient.post<ATSAnalysisResponse>('/api/v1/ats/api/ats/analyze', {
+  const res = await httpClient.post<ATSAnalysisResponse>('/v1/ats/api/ats/analyze', {
     resumeId,
     jobDescription,
   })

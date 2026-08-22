@@ -55,6 +55,8 @@ public class ATSServiceImpl implements AtsAnalysisService {
         resume = resumeService.healExtractedTextIfNecessary(resume);
         String extractedText = resume.getExtractedText();
 
+        String cleanTargetRole = (targetRole != null && !targetRole.trim().isBlank()) ? targetRole.trim() : "Software Engineer";
+
         // 1. Build Extraction Telemetry
         ExtractionQualityValidator.QualityAssessment quality = extractionQualityValidator.assess(extractedText);
         String extractionMethod = "docx".equalsIgnoreCase(resume.getFileType()) ? "POI_DOCX" : "PDFBOX_DIRECT";
@@ -76,7 +78,7 @@ public class ATSServiceImpl implements AtsAnalysisService {
                 .build();
 
         // 2. Perform Universal 7-Category Evaluation
-        UniversalAtsIntelligenceEngine.UniversalAnalysisResult result = universalAtsEngine.analyze(extractedText, telemetry, targetRole);
+        UniversalAtsIntelligenceEngine.UniversalAnalysisResult result = universalAtsEngine.analyze(extractedText, telemetry, cleanTargetRole);
 
         // 3. Compute Real Historical Comparison (if previous analysis exists)
         List<AtsAnalysisEntity> pastAnalyses = atsAnalysisRepository.findTop2ByResumeIdAndAnalysisModeOrderByCreatedAtDesc(resumeId, "UNIVERSAL");
@@ -110,7 +112,7 @@ public class ATSServiceImpl implements AtsAnalysisService {
                 .userId(userId)
                 .resumeId(resumeId)
                 .analysisMode("UNIVERSAL")
-                .targetRole(targetRole)
+                .targetRole(cleanTargetRole)
                 .analysisStatus(result.analysisStatus())
                 .extractionStatus(quality.status().name())
                 .extractionMethod(extractionMethod)
@@ -137,12 +139,16 @@ public class ATSServiceImpl implements AtsAnalysisService {
         AtsAnalysisEntity saved = atsAnalysisRepository.save(entity);
         log.info("[ATS-INTELLIGENCE] Saved universal analysis id={} for resumeId={}", saved.getId(), resumeId);
 
+        String analyzedAtStr = (saved.getCreatedAt() != null)
+                ? saved.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                : LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+
         // 5. Map to DTO
         return AtsIntelligenceDto.builder()
                 .analysisId(String.valueOf(saved.getId()))
                 .resumeId(resumeId)
                 .mode("UNIVERSAL")
-                .targetRole(targetRole)
+                .targetRole(cleanTargetRole)
                 .analysisStatus(result.analysisStatus())
                 .overallScore(result.overallScore())
                 .scoreLabel(result.scoreLabel())
@@ -164,7 +170,7 @@ public class ATSServiceImpl implements AtsAnalysisService {
                 .detailedRecommendations(result.detailedRecommendations())
                 .keywordAnalysis(result.keywordIntelligence())
                 .historyComparison(historyComparison)
-                .analyzedAt(saved.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+                .analyzedAt(analyzedAtStr)
                 .build();
     }
 
@@ -287,7 +293,7 @@ public class ATSServiceImpl implements AtsAnalysisService {
                                 ((double) jobMatch.matchedRequiredSkills().size() / (jobMatch.matchedRequiredSkills().size() + jobMatch.missingRequiredSkills().size())) * 100.0)
                         .build())
                 .jobMatch(jobMatchDto)
-                .analyzedAt(saved.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+                .analyzedAt(saved.getCreatedAt() != null ? saved.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
                 .build();
     }
 

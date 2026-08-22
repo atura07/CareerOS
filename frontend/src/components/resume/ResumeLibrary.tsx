@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import type { ResumeFile, ViewMode, SortOption } from './types'
-import { MOCK_RESUMES, AVAILABLE_TAGS } from './resumeData'
+import { AVAILABLE_TAGS } from './resumeData'
 import { ResumeToolbar } from './ResumeToolbar'
 import { ResumeCardGrid } from './ResumeCardGrid'
 import { ResumeListView } from './ResumeListView'
@@ -29,7 +29,7 @@ interface ResumeLibraryProps {
 }
 
 export function ResumeLibrary({ refreshCounter = 0, onSelectResume }: ResumeLibraryProps) {
-  const [resumes, setResumes] = useState<ResumeFile[]>(MOCK_RESUMES)
+  const [resumes, setResumes] = useState<ResumeFile[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [sortOption, setSortOption] = useState<SortOption>('newest')
@@ -42,20 +42,20 @@ export function ResumeLibrary({ refreshCounter = 0, onSelectResume }: ResumeLibr
     async function fetchResumes() {
       setLoading(true)
       try {
-        const data = await listResumes(1)
+        const data = await listResumes()
         if (!cancelled) {
           const mapped = data.map(mapBackendResume)
-          setResumes(mapped)
-          if (mapped.length > 0) {
-            onSelectResume?.(mapped[0])
+          const uniqueResumes = Array.from(
+            new Map(mapped.map((item) => [item.id, item])).values()
+          )
+          setResumes(uniqueResumes)
+          if (uniqueResumes.length > 0) {
+            onSelectResume?.(uniqueResumes[0])
           }
         }
       } catch {
         if (!cancelled) {
-          setResumes(MOCK_RESUMES)
-          if (MOCK_RESUMES.length > 0) {
-            onSelectResume?.(MOCK_RESUMES[0])
-          }
+          setResumes([])
         }
       } finally {
         if (!cancelled) setLoading(false)

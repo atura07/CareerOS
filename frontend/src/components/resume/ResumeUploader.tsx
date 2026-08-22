@@ -21,7 +21,7 @@ export function ResumeUploader({ onUploadSuccess }: ResumeUploaderProps) {
     setUploadError(null)
 
     try {
-      await uploadResume(f, 1)
+      await uploadResume(f)
       setIsUploading(false)
       setUploaded(true)
       onUploadSuccess?.()

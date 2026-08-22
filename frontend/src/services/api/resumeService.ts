@@ -8,11 +8,13 @@ import type { ResumeResponse } from './types'
  */
 export async function uploadResume(
   file: File,
-  userId: number = 1,
+  userId?: number,
 ): Promise<ResumeResponse> {
   const formData = new FormData()
   formData.append('file', file)
-  formData.append('userId', String(userId))
+  if (userId !== undefined) {
+    formData.append('userId', String(userId))
+  }
 
   const response = await httpClient.post<ResumeResponse>(
     ENDPOINTS.RESUME_UPLOAD,
@@ -26,14 +28,14 @@ export async function uploadResume(
 
 /**
  * List all resumes for a user.
- * GET /api/v1/resume?userId={userId}
+ * GET /api/v1/resume
  */
 export async function listResumes(
-  userId: number = 1,
+  userId?: number,
 ): Promise<ResumeResponse[]> {
   const response = await httpClient.get<ResumeResponse[]>(
     ENDPOINTS.RESUME_LIST,
-    { params: { userId } },
+    { params: userId !== undefined ? { userId } : undefined },
   )
   return response.data
 }
