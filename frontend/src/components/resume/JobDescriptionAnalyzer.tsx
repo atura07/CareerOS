@@ -53,8 +53,8 @@ const TARGET_ROLES = [
   'General',
 ]
 
-function ScoreRing({ score, size = 110 }: { score: number; size?: number }) {
-  const radius = size * 0.4
+function ScoreRing({ score, size = 120 }: { score: number; size?: number }) {
+  const radius = size * 0.38
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (Math.min(100, Math.max(0, score)) / 100) * circumference
 
@@ -67,7 +67,7 @@ function ScoreRing({ score, size = 110 }: { score: number; size?: number }) {
                   '#ef4444'
 
   return (
-    <div className="relative flex items-center justify-center">
+    <div className="relative flex shrink-0 items-center justify-center">
       <svg width={size} height={size} className="-rotate-90">
         <circle
           cx={size / 2}
@@ -90,11 +90,11 @@ function ScoreRing({ score, size = 110 }: { score: number; size?: number }) {
           className="transition-all duration-700 ease-out"
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
+      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
         <span className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white/95">
           {score}
         </span>
-        <span className="text-[10px] uppercase font-bold text-white/40">/ 100</span>
+        <span className="text-[10px] uppercase font-bold tracking-wider text-white/40">/ 100</span>
       </div>
     </div>
   )
@@ -218,19 +218,21 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.15 }}
-      className="overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5 backdrop-blur-xl sm:p-6"
+      transition={{ duration: 0.4, delay: 0.1 }}
+      className="w-full rounded-3xl border border-white/[0.08] bg-[#090d16]/90 p-5 sm:p-7 md:p-8 backdrop-blur-xl shadow-2xl shadow-black/40 min-w-0 box-border"
     >
       {/* ── Mode Selection Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-blue-400" />
-            <h2 className="text-base sm:text-lg font-bold text-white/95">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/[0.06] pb-5">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20">
+              <Zap className="h-4 w-4" />
+            </div>
+            <h2 className="text-base sm:text-xl font-bold tracking-tight text-white/95 truncate">
               Resume Intelligence & ATS Analyzer
             </h2>
           </div>
-          <p className="mt-0.5 text-xs text-white/50">
+          <p className="mt-1 text-xs sm:text-sm text-white/50">
             {mode === 'UNIVERSAL'
               ? 'Estimated ATS Compatibility evaluated across 7 deterministic categories.'
               : 'Targeted keyword & skill alignment matched against specific Job Description.'}
@@ -238,15 +240,15 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
         </div>
 
         {/* Tab & Utility Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           {/* Target Role Selector */}
-          <div className="flex items-center gap-1.5 rounded-2xl border border-white/[0.08] bg-black/40 px-3 py-1.5 text-xs text-white/70">
-            <Target className="h-3.5 w-3.5 text-blue-400" />
-            <span className="text-[11px] text-white/40">Role:</span>
+          <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-black/40 px-3.5 py-2 text-xs text-white/70">
+            <Target className="h-4 w-4 text-blue-400 shrink-0" />
+            <span className="text-[11px] text-white/40 font-medium">Role:</span>
             <select
               value={targetRole}
               onChange={(e) => setTargetRole(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-white outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-white outline-none cursor-pointer pr-1"
             >
               {TARGET_ROLES.map((r) => (
                 <option key={r} value={r} className="bg-zinc-900 text-white">
@@ -261,9 +263,9 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
             <button
               type="button"
               onClick={() => setMode('UNIVERSAL')}
-              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
                 mode === 'UNIVERSAL'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
                   : 'text-white/60 hover:text-white'
               }`}
             >
@@ -272,9 +274,9 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
             <button
               type="button"
               onClick={() => setMode('JOB_MATCH')}
-              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
                 mode === 'JOB_MATCH'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
                   : 'text-white/60 hover:text-white'
               }`}
             >
@@ -286,7 +288,7 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
           <button
             type="button"
             onClick={() => setBulletModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-2xl border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition-all"
+            className="flex items-center gap-2 rounded-2xl border border-purple-500/30 bg-purple-500/10 px-3.5 py-2 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition-all shadow-sm"
           >
             <Wand2 className="h-3.5 w-3.5" /> Improve Bullet
           </button>
@@ -300,11 +302,11 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="mt-4 flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300"
+            className="mt-4 flex items-center gap-2.5 rounded-2xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-300"
           >
             <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
-            <span className="flex-1">{error}</span>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-white text-xs">
+            <span className="flex-1 font-medium">{error}</span>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-white text-xs font-semibold px-2 py-0.5">
               Dismiss
             </button>
           </motion.div>
@@ -312,52 +314,52 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
       </AnimatePresence>
 
       {!resume ? (
-        <div className="py-12 text-center text-xs text-white/40">
-          Select or upload a resume from the library to view CareerOS ATS Compatibility.
+        <div className="py-16 text-center text-sm text-white/40">
+          Select or upload a resume from the library above to view universal and job-specific ATS Compatibility.
         </div>
       ) : mode === 'UNIVERSAL' ? (
         /* ════════════════ MODE 1: UNIVERSAL ATS INTELLIGENCE ════════════════ */
-        <div className="mt-5 space-y-5">
+        <div className="mt-6 space-y-6 min-w-0">
           {loadingUniversal ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-3 text-white/50 text-xs">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
-              <span>Running multi-stage extraction and 7-category evaluation for {targetRole}...</span>
+            <div className="flex flex-col items-center justify-center py-20 gap-3 text-white/50 text-xs">
+              <Loader2 className="h-7 w-7 animate-spin text-blue-400" />
+              <span className="font-medium text-sm">Evaluating resume against deterministic ATS criteria for {targetRole}...</span>
             </div>
           ) : universalData ? (
             <>
               {/* Hero Score Card */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-5 rounded-2xl border border-white/[0.08] bg-black/30 p-5">
-                <div className="flex items-center gap-4">
-                  <ScoreRing score={universalData.overallScore} />
-                  <div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-400">
-                        <Sparkles className="h-3 w-3" /> {universalData.scoreLabel}
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-6 rounded-2xl border border-white/[0.08] bg-black/40 p-6 sm:p-7 backdrop-blur min-w-0">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 min-w-0">
+                  <ScoreRing score={universalData.overallScore} size={120} />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-400">
+                        <Sparkles className="h-3.5 w-3.5" /> {universalData.scoreLabel}
                       </span>
 
                       {/* Confidence Tag */}
-                      <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-semibold text-white/70">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/70">
                         {universalData.confidence}% Confidence
                       </span>
 
                       {/* Extraction Status Badge */}
                       {universalData.extraction?.method === 'OCR_FALLBACK' || universalData.extraction?.status === 'OCR_USED' ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-purple-300">
-                          <Eye className="h-3 w-3" /> OCR-assisted
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-semibold text-purple-300">
+                          <Eye className="h-3.5 w-3.5" /> OCR-assisted
                         </span>
                       ) : universalData.extraction?.method === 'POI_DOCX' ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
-                          <FileText className="h-3 w-3" /> DOCX structured
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                          <FileText className="h-3.5 w-3.5" /> DOCX structured
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-semibold text-white/70">
-                          <FileText className="h-3 w-3" /> Direct text
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/70">
+                          <FileText className="h-3.5 w-3.5" /> Direct text
                         </span>
                       )}
 
                       {/* Real Historical Comparison Tag */}
                       {universalData.historyComparison && universalData.historyComparison.scoreDelta !== 0 && (
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
                           universalData.historyComparison.scoreDelta > 0
                             ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
                             : 'border border-amber-500/30 bg-amber-500/10 text-amber-400'
@@ -368,16 +370,16 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                       )}
                     </div>
 
-                    <h3 className="mt-1.5 text-sm sm:text-base font-bold text-white/90">
+                    <h3 className="mt-1 text-base sm:text-lg font-bold text-white/95">
                       CareerOS ATS Compatibility Score
                     </h3>
-                    <p className="mt-0.5 text-xs text-white/50 leading-relaxed max-w-sm">
+                    <p className="mt-1 text-xs sm:text-sm text-white/60 leading-relaxed max-w-2xl">
                       {universalData.summary?.description}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:items-end gap-2">
+                <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end gap-3 shrink-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-white/[0.06]">
                   <button
                     type="button"
                     onClick={() => setShowFormula(!showFormula)}
@@ -385,14 +387,14 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                   >
                     <Info className="h-3.5 w-3.5" />
                     <span>How is this calculated?</span>
-                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showFormula ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showFormula ? 'rotate-180' : ''}`} />
                   </button>
 
                   {historyList.length > 1 && (
                     <button
                       type="button"
                       onClick={() => setShowHistory(!showHistory)}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-white/50 hover:text-white transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-white/60 hover:text-white transition-colors"
                     >
                       <History className="h-3.5 w-3.5" />
                       <span>View Version History ({historyList.length})</span>
@@ -408,20 +410,20 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden rounded-2xl border border-white/[0.08] bg-black/40 p-4 space-y-2"
+                    className="overflow-hidden rounded-2xl border border-white/[0.08] bg-black/40 p-5 space-y-3"
                   >
                     <h4 className="text-xs font-bold text-white/80 uppercase tracking-wider">
                       Real Analysis Revision History
                     </h4>
-                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1">
                       {historyList.map((h: AtsIntelligenceResponse, i: number) => (
-                        <div key={i} className="flex items-center justify-between rounded-xl bg-white/[0.02] border border-white/[0.04] px-3 py-2 text-xs">
+                        <div key={i} className="flex items-center justify-between rounded-xl bg-white/[0.02] border border-white/[0.04] p-3 text-xs">
                           <div>
                             <span className="font-semibold text-white/90">{h.targetRole || 'Software Engineer'}</span>
-                            <span className="text-[11px] text-white/40 block">{h.analyzedAt ? new Date(h.analyzedAt).toLocaleDateString() : 'Previous version'}</span>
+                            <span className="text-[11px] text-white/40 block mt-0.5">{h.analyzedAt ? new Date(h.analyzedAt).toLocaleDateString() : 'Previous version'}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-blue-400">{h.overallScore}/100</span>
+                            <span className="font-extrabold text-blue-400 text-sm">{h.overallScore}/100</span>
                             <span className="text-[11px] text-white/50">{h.scoreLabel}</span>
                           </div>
                         </div>
@@ -438,112 +440,136 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-white/60 space-y-2"
+                    className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 text-xs text-white/60 space-y-3"
                   >
-                    <p className="font-semibold text-white/90">Deterministic Universal ATS Formula (100 Pts):</p>
-                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-white/60 pt-1">
-                      <li>• <strong className="text-white/80">Parsability & Document Health (15 pts):</strong> Text readability, UTF-8 clean stream, density, absence of corrupt glyphs.</li>
-                      <li>• <strong className="text-white/80">Core Section Completeness (20 pts):</strong> Contact, Summary, Education, Skills, Projects, Experience (Fresher-aware).</li>
-                      <li>• <strong className="text-white/80">Contact & Professional Identity (10 pts):</strong> Name, verified email, phone, GitHub/LinkedIn profile links.</li>
-                      <li>• <strong className="text-white/80">Skills & Technical Signals (15 pts):</strong> Normalized skill diversity + in-project evidence credibility.</li>
-                      <li>• <strong className="text-white/80">Experience & Project Quality (20 pts):</strong> Engineering action verbs, quantified metrics (%, users, latency), repo links.</li>
-                      <li>• <strong className="text-white/80">Readability & ATS Safety (10 pts):</strong> Standard headings, bullet structure, zero keyword spam.</li>
-                      <li>• <strong className="text-white/80">Achievements & Profile Strength (10 pts):</strong> Certifications, hackathons, competitive programming, awards.</li>
+                    <p className="font-semibold text-sm text-white/90">Deterministic Universal ATS Formula (100 Pts):</p>
+                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-white/60 pt-1">
+                      <li className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+                        <strong className="text-white/85 block mb-0.5">1. Parsability & Document Health (15 pts):</strong> Text readability, clean UTF-8 stream, layout density, absence of corrupt glyphs.
+                      </li>
+                      <li className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+                        <strong className="text-white/85 block mb-0.5">2. Core Section Completeness (20 pts):</strong> Contact, Summary, Education, Skills, Projects, Experience (fresher-aware).
+                      </li>
+                      <li className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+                        <strong className="text-white/85 block mb-0.5">3. Contact & Professional Identity (10 pts):</strong> Candidate name, verified email, phone, GitHub/LinkedIn profile links.
+                      </li>
+                      <li className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+                        <strong className="text-white/85 block mb-0.5">4. Skills & Technical Signals (15 pts):</strong> Normalized skill taxonomy, breadth of stack, and in-project evidence credibility.
+                      </li>
+                      <li className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+                        <strong className="text-white/85 block mb-0.5">5. Experience & Project Quality (20 pts):</strong> Action verbs, quantified metrics (%, scale, latency), production details.
+                      </li>
+                      <li className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+                        <strong className="text-white/85 block mb-0.5">6. Readability & ATS Safety (10 pts):</strong> Standard headings, structured bullets, zero keyword spam.
+                      </li>
+                      <li className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3 md:col-span-2">
+                        <strong className="text-white/85 block mb-0.5">7. Achievements & Profile Strength (10 pts):</strong> Hackathons, certifications, competitive programming, and technical distinctions.
+                      </li>
                     </ul>
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              {/* 7 Category Cards */}
+              {/* 7 Category Cards Grid */}
               {universalData.scoreBreakdown && universalData.scoreBreakdown.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {universalData.scoreBreakdown.map((cat: CategoryDetail) => {
-                    const isExpanded = expandedCategory === cat.category
-                    return (
-                      <div
-                        key={cat.category}
-                        className="flex flex-col justify-between rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 cursor-pointer hover:border-white/[0.12] transition-colors"
-                        onClick={() => setExpandedCategory(isExpanded ? null : cat.category)}
-                      >
-                        <div>
-                          <div className="flex items-center justify-between text-xs font-semibold text-white/90 mb-1.5">
-                            <span className="flex items-center gap-1.5">
-                              {cat.category}
-                              {cat.status === 'STRONG' && <Check className="h-3 w-3 text-emerald-400" />}
-                            </span>
-                            <span className="font-extrabold text-blue-400">
-                              {cat.score} / {cat.maxScore}
-                            </span>
+                <div className="w-full min-w-0">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-white/70">
+                      7 Core Evaluation Categories
+                    </h4>
+                    <span className="text-xs text-white/40">Click any card to inspect evidence</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full min-w-0">
+                    {universalData.scoreBreakdown.map((cat: CategoryDetail) => {
+                      const isExpanded = expandedCategory === cat.category
+                      return (
+                        <div
+                          key={cat.category}
+                          className="min-h-[145px] h-full flex flex-col justify-between rounded-2xl border border-white/[0.07] bg-white/[0.025] hover:bg-white/[0.045] p-5 cursor-pointer transition-all duration-200 hover:border-white/[0.14] hover:shadow-lg hover:shadow-black/20 min-w-0"
+                          onClick={() => setExpandedCategory(isExpanded ? null : cat.category)}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-white/90 mb-1.5">
+                              <span className="flex items-center gap-1.5 truncate">
+                                {cat.category}
+                                {cat.status === 'STRONG' && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
+                              </span>
+                              <span className="font-extrabold text-blue-400 shrink-0 text-xs sm:text-sm ml-2">
+                                {cat.score} / {cat.maxScore}
+                              </span>
+                            </div>
+                            <p className="text-xs text-white/55 leading-relaxed mt-1 mb-2">{cat.reason}</p>
+
+                            {/* Expandable Evidence */}
+                            <AnimatePresence>
+                              {isExpanded && cat.evidence && cat.evidence.length > 0 && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  className="mt-3 pt-2.5 border-t border-white/[0.06] space-y-1.5"
+                                >
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 block">
+                                    Detected Evidence
+                                  </span>
+                                  {cat.evidence.map((ev: string, i: number) => (
+                                    <p key={i} className="text-xs text-emerald-300/90 leading-tight">
+                                      • {ev}
+                                    </p>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
-                          <p className="text-[11px] text-white/50 leading-relaxed">{cat.reason}</p>
 
-                          {/* Expandable Evidence */}
-                          <AnimatePresence>
-                            {isExpanded && cat.evidence && cat.evidence.length > 0 && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                exit={{ opacity: 0, height: 0 }}
-                                className="mt-2.5 pt-2 border-t border-white/[0.04] space-y-1"
-                              >
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 block">
-                                  Resume Evidence
-                                </span>
-                                {cat.evidence.map((ev: string, i: number) => (
-                                  <p key={i} className="text-[11px] text-emerald-300/80 leading-tight">
-                                    • {ev}
-                                  </p>
-                                ))}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                            <div
+                              className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                              style={{ width: `${Math.min(100, (cat.score / cat.maxScore) * 100)}%` }}
+                            />
+                          </div>
                         </div>
-
-                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                          <div
-                            className="h-full rounded-full bg-blue-500 transition-all duration-500"
-                            style={{ width: `${Math.min(100, (cat.score / cat.maxScore) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
               )}
 
               {/* Detected Skills & Role Benchmark Suggestions */}
               {universalData.keywordAnalysis && (
-                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-white/70">
+                <div className="w-full rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5 sm:p-6 space-y-4 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-white/80">
                       Verified Technical Skills ({universalData.keywordAnalysis.matched?.length || 0})
                     </span>
-                    <span className="text-[11px] text-white/40">
+                    <span className="text-xs text-white/40">
                       Benchmarked for {targetRole}
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {universalData.keywordAnalysis.matched?.map((skill: string) => (
                       <span
                         key={skill}
-                        className="inline-flex items-center gap-1 rounded-xl border border-blue-500/20 bg-blue-500/08 px-2.5 py-1 text-xs font-medium text-blue-300"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-300"
                       >
-                        <Check className="h-3 w-3 text-blue-400" /> {skill}
+                        <Check className="h-3.5 w-3.5 text-blue-400" /> {skill}
                       </span>
                     ))}
                   </div>
 
                   {universalData.keywordAnalysis.suggested && universalData.keywordAnalysis.suggested.length > 0 && (
-                    <div className="pt-2 border-t border-white/[0.04]">
-                      <span className="text-[11px] font-bold text-white/50 block mb-1.5">
+                    <div className="pt-4 border-t border-white/[0.05]">
+                      <span className="text-xs font-bold text-white/60 block mb-2.5">
                         Recommended Additional Keywords for {targetRole}:
                       </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                         {universalData.keywordAnalysis.suggested.map((sug: SuggestedKeywordItem, i: number) => (
-                          <div key={i} className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-2.5 text-xs">
-                            <span className="font-semibold text-white/80">{sug.keyword}</span>
-                            <span className="text-[10px] text-blue-400/80 ml-1.5">({sug.category})</span>
-                            <p className="text-[11px] text-white/40 mt-0.5">{sug.whyItMatters}</p>
+                          <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5 text-xs space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-white/90">{sug.keyword}</span>
+                              <span className="text-[11px] text-blue-400 font-medium">({sug.category})</span>
+                            </div>
+                            <p className="text-xs text-white/50 leading-relaxed">{sug.whyItMatters}</p>
                           </div>
                         ))}
                       </div>
@@ -553,17 +579,17 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
               )}
 
               {/* Critical Issues & Quick Wins */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full min-w-0">
                 {universalData.criticalIssues && universalData.criticalIssues.length > 0 && (
-                  <div className="rounded-2xl border border-red-500/20 bg-red-500/04 p-4">
-                    <span className="text-xs font-bold uppercase tracking-wider text-red-400 flex items-center gap-1.5 mb-2">
+                  <div className="rounded-2xl border border-red-500/20 bg-red-500/05 p-5 space-y-3 min-w-0">
+                    <span className="text-xs font-bold uppercase tracking-wider text-red-400 flex items-center gap-2">
                       <AlertCircle className="h-4 w-4" /> High-Impact Improvements
                     </span>
-                    <ul className="space-y-2 text-xs">
+                    <ul className="space-y-2.5 text-xs">
                       {universalData.criticalIssues.map((issue: ActionableIssue, i: number) => (
-                        <li key={i} className="rounded-xl border border-red-500/10 bg-red-500/04 p-2.5 text-white/80">
-                          <span className="font-semibold text-red-300">{issue.title}</span>
-                          <p className="text-[11px] text-white/60 mt-0.5">{issue.fix}</p>
+                        <li key={i} className="rounded-xl border border-red-500/15 bg-red-500/05 p-3 text-white/85">
+                          <span className="font-semibold text-red-300 text-xs block mb-0.5">{issue.title}</span>
+                          <p className="text-xs text-white/60 leading-relaxed">{issue.fix}</p>
                         </li>
                       ))}
                     </ul>
@@ -571,15 +597,15 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                 )}
 
                 {universalData.quickWins && universalData.quickWins.length > 0 && (
-                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/04 p-4">
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 mb-2">
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/05 p-5 space-y-3 min-w-0">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
                       <Sparkles className="h-4 w-4" /> Quick Wins Checklist
                     </span>
-                    <ul className="space-y-1.5 text-xs text-white/70">
+                    <ul className="space-y-2 text-xs text-white/75">
                       {universalData.quickWins.map((qw: string, i: number) => (
-                        <li key={i} className="flex items-start gap-1.5">
-                          <span className="text-emerald-400 mt-0.5">✓</span>
-                          <span>{qw}</span>
+                        <li key={i} className="flex items-start gap-2 rounded-xl bg-white/[0.02] border border-white/[0.03] p-2.5">
+                          <span className="text-emerald-400 font-bold mt-0.5">✓</span>
+                          <span className="leading-relaxed">{qw}</span>
                         </li>
                       ))}
                     </ul>
@@ -591,16 +617,16 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
         </div>
       ) : (
         /* ════════════════ MODE 2: JOB-SPECIFIC ATS MATCH ════════════════ */
-        <div className="mt-5 space-y-5">
+        <div className="mt-6 space-y-6 min-w-0">
           {/* Job Description Form */}
-          <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-black/30 p-4 sm:p-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-4 rounded-2xl border border-white/[0.06] bg-black/30 p-5 sm:p-6 min-w-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-white/60 mb-1">
+                <label className="block text-xs font-semibold text-white/70 mb-1.5">
                   Target Job Title (Optional)
                 </label>
-                <div className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs text-white">
-                  <Briefcase className="h-3.5 w-3.5 text-white/40" />
+                <div className="flex items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3.5 py-2.5 text-xs text-white">
+                  <Briefcase className="h-4 w-4 text-white/40 shrink-0" />
                   <input
                     type="text"
                     value={jobTitle}
@@ -612,11 +638,11 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-white/60 mb-1">
+                <label className="block text-xs font-semibold text-white/70 mb-1.5">
                   Target Company (Optional)
                 </label>
-                <div className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs text-white">
-                  <Building2 className="h-3.5 w-3.5 text-white/40" />
+                <div className="flex items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3.5 py-2.5 text-xs text-white">
+                  <Building2 className="h-4 w-4 text-white/40 shrink-0" />
                   <input
                     type="text"
                     value={companyName}
@@ -629,8 +655,8 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
             </div>
 
             <div>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <label className="font-semibold text-white/60">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <label className="font-semibold text-white/70">
                   Job Description Text <span className="text-red-400">*</span>
                 </label>
                 <span className="text-[11px] text-white/40">
@@ -642,7 +668,7 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                 onChange={(e) => setJobDescription(e.target.value)}
                 rows={6}
                 placeholder="Paste the complete job description, requirements, and responsibilities here..."
-                className="w-full resize-y rounded-xl border border-white/[0.08] bg-white/[0.02] px-3.5 py-2.5 text-xs text-white/90 placeholder-white/30 outline-none focus:border-blue-500/40 focus:ring-1 focus:ring-blue-500/20"
+                className="w-full resize-y rounded-xl border border-white/[0.08] bg-white/[0.02] p-3.5 text-xs text-white/90 placeholder-white/30 outline-none focus:border-blue-500/40 focus:ring-1 focus:ring-blue-500/20 leading-relaxed"
               />
             </div>
 
@@ -650,7 +676,7 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
               type="button"
               disabled={!jobDescription.trim() || loadingJobMatch}
               onClick={handleAnalyzeJobMatch}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-xs font-bold text-white shadow-lg shadow-blue-500/25 hover:bg-blue-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {loadingJobMatch ? (
                 <>
@@ -668,21 +694,21 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
 
           {/* Job Match Results */}
           {jobMatchData && (
-            <div className="space-y-4">
+            <div className="space-y-6 min-w-0">
               {/* Score Header Card */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-5 rounded-2xl border border-white/[0.08] bg-black/40 p-5">
-                <div className="flex items-center gap-4">
-                  <ScoreRing score={jobMatchData.jobMatchScore || 0} />
-                  <div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
-                        <Sparkles className="h-3 w-3" /> {jobMatchData.matchLevel}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-5 rounded-2xl border border-white/[0.08] bg-black/40 p-6">
+                <div className="flex items-center gap-5 min-w-0">
+                  <ScoreRing score={jobMatchData.jobMatchScore || 0} size={120} />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400">
+                        <Sparkles className="h-3.5 w-3.5" /> {jobMatchData.matchLevel}
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.1] bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/70">
                         {jobMatchData.confidence}% Confidence
                       </span>
                     </div>
-                    <h3 className="mt-1 text-sm sm:text-base font-bold text-white/90">
+                    <h3 className="mt-1.5 text-base sm:text-lg font-bold text-white/95 truncate">
                       Target Match: {jobMatchData.jobTitle || 'Target Role'}{' '}
                       {jobMatchData.companyName ? `at ${jobMatchData.companyName}` : ''}
                     </h3>
@@ -690,16 +716,16 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                   </div>
                 </div>
 
-                <div className="text-right text-xs">
+                <div className="text-right text-xs shrink-0">
                   <span className="text-white/40 block">Universal Compatibility</span>
-                  <span className="text-sm font-bold text-blue-400">
+                  <span className="text-base font-extrabold text-blue-400">
                     {jobMatchData.overallScore} / 100
                   </span>
                 </div>
               </div>
 
               {/* Sub-Tabs */}
-              <div className="flex flex-wrap gap-1 border-b border-white/[0.06] pb-2">
+              <div className="flex flex-wrap gap-1.5 border-b border-white/[0.06] pb-3">
                 {[
                   { id: 'OVERVIEW', label: 'Overview', icon: Layers },
                   { id: 'MATCHED', label: `Required Skills (${jobMatchData.jobMatch?.matchedRequiredSkills?.length || 0})`, icon: CheckCircle2 },
@@ -714,9 +740,9 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                       key={t.id}
                       type="button"
                       onClick={() => setActiveJobTab(t.id as typeof activeJobTab)}
-                      className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${
+                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
                         isActive
-                          ? 'border border-blue-500/30 bg-blue-500/10 text-blue-400'
+                          ? 'border border-blue-500/30 bg-blue-500/10 text-blue-400 shadow-sm'
                           : 'text-white/50 hover:text-white'
                       }`}
                     >
@@ -731,20 +757,20 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
               {activeJobTab === 'OVERVIEW' && (
                 <div className="space-y-4">
                   {jobMatchData.scoreBreakdown && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {jobMatchData.scoreBreakdown.map((cat: CategoryDetail) => (
                         <div
                           key={cat.category}
-                          className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 flex flex-col justify-between"
+                          className="min-h-[140px] rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 flex flex-col justify-between"
                         >
                           <div>
-                            <div className="flex items-center justify-between text-xs font-semibold text-white/90 mb-1">
+                            <div className="flex items-center justify-between text-xs font-semibold text-white/90 mb-1.5">
                               <span>{cat.category}</span>
                               <span className="font-extrabold text-blue-400">
                                 {cat.score} / {cat.maxScore}
                               </span>
                             </div>
-                            <p className="text-[11px] text-white/50">{cat.reason}</p>
+                            <p className="text-xs text-white/50 leading-relaxed">{cat.reason}</p>
                           </div>
                           <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
                             <div
@@ -760,8 +786,8 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
               )}
 
               {activeJobTab === 'MATCHED' && (
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/04 p-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2">
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/05 p-5 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
                     Verified Skills in Resume Matching Stated Job Requirements
                   </h4>
                   {jobMatchData.jobMatch?.matchedRequiredSkills && jobMatchData.jobMatch.matchedRequiredSkills.length > 0 ? (
@@ -782,12 +808,12 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
               )}
 
               {activeJobTab === 'MISSING' && (
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/04 p-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-1">
-                    Skills mentioned in this job description that were not detected in your resume
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/05 p-5 space-y-2.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                    Skills Mentioned in Job Description Not Detected in Resume
                   </h4>
-                  <p className="text-[11px] text-white/50 mb-3">
-                    Adding practical experience or projects covering these skills will maximize your interview callback rate.
+                  <p className="text-xs text-white/50 mb-3">
+                    Adding practical experience or projects covering these skills will maximize your ATS keyword ranking and callback rate.
                   </p>
                   {jobMatchData.jobMatch?.missingRequiredSkills && jobMatchData.jobMatch.missingRequiredSkills.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
@@ -801,40 +827,40 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-emerald-400">Great job! Your resume covers all required skills from this job description.</p>
+                    <p className="text-xs text-emerald-400 font-medium">Great job! Your resume covers all key required skills from this job description.</p>
                   )}
                 </div>
               )}
 
               {activeJobTab === 'KEYWORDS' && (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between text-xs font-semibold text-white/80">
                     <span>Priority JD Keywords Alignment Rate</span>
-                    <span className="text-blue-400 font-bold">
+                    <span className="text-blue-400 font-bold text-sm">
                       {Math.round(jobMatchData.keywordAnalysis?.keywordCoverage || 0)}%
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 block mb-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 block mb-3">
                         Matched Keywords ({jobMatchData.keywordAnalysis?.matched?.length || 0})
                       </span>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap gap-2">
                         {jobMatchData.keywordAnalysis?.matched?.map((kw: string) => (
-                          <span key={kw} className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[11px] text-emerald-300">
+                          <span key={kw} className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-xs text-emerald-300 font-medium">
                             {kw}
                           </span>
                         ))}
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <span className="text-xs font-bold uppercase tracking-wider text-white/50 block mb-2">
+                    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-white/50 block mb-3">
                         Missing Keywords ({jobMatchData.keywordAnalysis?.missing?.length || 0})
                       </span>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap gap-2">
                         {jobMatchData.keywordAnalysis?.missing?.map((kw: string) => (
-                          <span key={kw} className="rounded-lg bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 text-[11px] text-white/60">
+                          <span key={kw} className="rounded-lg bg-white/[0.04] border border-white/[0.08] px-2.5 py-1 text-xs text-white/65 font-medium">
                             {kw}
                           </span>
                         ))}
@@ -845,18 +871,18 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
               )}
 
               {activeJobTab === 'SUGGESTIONS' && (
-                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-3">
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-3.5">
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-blue-400" />
                     <h4 className="text-xs font-bold uppercase tracking-wider text-white/90">
                       Context-Aware AI Improvement Suggestions
                     </h4>
                   </div>
-                  <ul className="space-y-2">
+                  <ul className="space-y-2.5">
                     {jobMatchData.quickWins?.map((imp: string, i: number) => (
                       <li
                         key={i}
-                        className="flex items-start gap-2.5 rounded-xl border border-white/[0.04] bg-white/[0.02] p-3 text-xs text-white/80 leading-relaxed"
+                        className="flex items-start gap-3 rounded-xl border border-white/[0.04] bg-white/[0.02] p-3.5 text-xs text-white/80 leading-relaxed"
                       >
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-[11px] font-bold text-blue-400">
                           {i + 1}
@@ -875,16 +901,18 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
       {/* ── Interactive Bullet Improver Modal ── */}
       <AnimatePresence>
         {bulletModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-xl rounded-3xl border border-white/[0.1] bg-zinc-950 p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-xl rounded-3xl border border-white/[0.1] bg-zinc-950 p-6 sm:p-7 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
-                <div className="flex items-center gap-2">
-                  <Wand2 className="h-5 w-5 text-purple-400" />
+              <div className="flex items-center justify-between border-b border-white/[0.08] pb-3.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-500/10 text-purple-400 ring-1 ring-purple-500/20">
+                    <Wand2 className="h-4 w-4" />
+                  </div>
                   <h3 className="text-sm sm:text-base font-bold text-white">
                     Interactive Resume Bullet Improver
                   </h3>
@@ -892,14 +920,14 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                 <button
                   type="button"
                   onClick={() => setBulletModalOpen(false)}
-                  className="text-white/40 hover:text-white text-xs"
+                  className="rounded-lg p-1.5 text-white/40 hover:bg-white/[0.06] hover:text-white text-xs transition-colors"
                 >
                   ✕
                 </button>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-white/70 mb-1">
+                <label className="block text-xs font-semibold text-white/70 mb-1.5">
                   Paste or type a weak bullet point:
                 </label>
                 <textarea
@@ -912,7 +940,7 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-white/70 mb-1">
+                <label className="block text-xs font-semibold text-white/70 mb-1.5">
                   Context Technologies (Optional):
                 </label>
                 <input
@@ -928,7 +956,7 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                 type="button"
                 disabled={!bulletInput.trim() || bulletLoading}
                 onClick={handleImproveBulletSubmit}
-                className="w-full rounded-xl bg-purple-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-purple-500/20 hover:bg-purple-500 transition-all disabled:opacity-40"
+                className="w-full rounded-xl bg-purple-600 px-5 py-3 text-xs font-bold text-white shadow-lg shadow-purple-500/20 hover:bg-purple-500 transition-all disabled:opacity-40"
               >
                 {bulletLoading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -940,14 +968,14 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
               </button>
 
               {bulletResult && (
-                <div className="space-y-3 pt-3 border-t border-white/[0.08]">
-                  <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-3">
-                    <div className="flex items-center justify-between text-xs mb-1">
+                <div className="space-y-3.5 pt-3.5 border-t border-white/[0.08]">
+                  <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-3.5">
+                    <div className="flex items-center justify-between text-xs mb-1.5">
                       <span className="font-bold text-purple-300">Recommended Action Rewrite:</span>
                       <button
                         type="button"
                         onClick={() => handleCopy(bulletResult.improvedBullet)}
-                        className="inline-flex items-center gap-1 text-[11px] text-purple-400 hover:text-white"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-400 hover:text-white"
                       >
                         <Copy className="h-3 w-3" /> {copiedBullet ? 'Copied!' : 'Copy'}
                       </button>
@@ -959,15 +987,15 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
 
                   {bulletResult.alternativeVariations && bulletResult.alternativeVariations.length > 0 && (
                     <div>
-                      <span className="text-[11px] font-bold text-white/60 block mb-1">Alternative Variations:</span>
-                      <ul className="space-y-1.5 text-xs text-white/70">
+                      <span className="text-[11px] font-bold text-white/60 block mb-1.5">Alternative Variations:</span>
+                      <ul className="space-y-2 text-xs text-white/75">
                         {bulletResult.alternativeVariations.map((v: string, idx: number) => (
-                          <li key={idx} className="rounded-lg bg-white/[0.02] border border-white/[0.04] p-2 flex items-start justify-between gap-2">
-                            <span>• {v}</span>
+                          <li key={idx} className="rounded-lg bg-white/[0.02] border border-white/[0.04] p-2.5 flex items-start justify-between gap-2.5">
+                            <span className="leading-relaxed">• {v}</span>
                             <button
                               type="button"
                               onClick={() => handleCopy(v)}
-                              className="text-white/40 hover:text-white text-[10px] shrink-0"
+                              className="text-white/40 hover:text-white text-[10px] font-medium shrink-0 pt-0.5"
                             >
                               Copy
                             </button>
@@ -978,11 +1006,11 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                   )}
 
                   {bulletResult.metricsPlaceholderPrompts && bulletResult.metricsPlaceholderPrompts.length > 0 && (
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/04 p-3">
-                      <span className="text-[11px] font-bold text-amber-400 block mb-1">
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/04 p-3.5">
+                      <span className="text-[11px] font-bold text-amber-400 block mb-1.5">
                         Questions to Help You Add Real Measurable Metrics (Never Fabricate):
                       </span>
-                      <ul className="space-y-1 text-[11px] text-white/70">
+                      <ul className="space-y-1 text-xs text-white/70">
                         {bulletResult.metricsPlaceholderPrompts.map((q: string, idx: number) => (
                           <li key={idx}>- {q}</li>
                         ))}
