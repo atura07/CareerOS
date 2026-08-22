@@ -115,16 +115,38 @@ public class LeetCodeController {
         if (principal instanceof User user) {
             return user.getId();
         }
+        String email = null;
         if (principal instanceof UserDetails userDetails) {
-            return userRepository.findByEmail(userDetails.getUsername())
-                    .map(User::getId)
-                    .orElse(paramUserId != null ? paramUserId : 1L);
+            email = userDetails.getUsername();
+        } else if (authentication != null && authentication.getName() != null && !authentication.getName().equals("anonymousUser")) {
+            email = authentication.getName();
         }
-        if (authentication != null && authentication.getName() != null && !authentication.getName().equals("anonymousUser")) {
-            return userRepository.findByEmail(authentication.getName())
+
+        if (email != null && !email.isBlank()) {
+            final String userEmail = email.trim();
+            return userRepository.findByEmail(userEmail)
                     .map(User::getId)
-                    .orElse(paramUserId != null ? paramUserId : 1L);
+                    .orElseGet(() -> {
+                        try {
+                            User newUser = User.builder()
+                                    .email(userEmail)
+                                    .fullName(userEmail.contains("@") ? userEmail.split("@")[0] : userEmail)
+                                    .emailVerified(true)
+                                    .role(com.careeros.user.Role.ROLE_USER)
+                                    .build();
+                            return userRepository.save(newUser).getId();
+                        } catch (Exception e) {
+                            return userRepository.findByEmail(userEmail)
+                                    .map(User::getId)
+                                    .orElse(paramUserId != null ? paramUserId : 1L);
+                        }
+                    });
         }
-        return paramUserId != null ? paramUserId : 1L;
+
+        if (paramUserId != null) {
+            return paramUserId;
+        }
+
+        return 1L;
     }
 }
