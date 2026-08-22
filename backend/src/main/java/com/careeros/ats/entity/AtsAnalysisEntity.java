@@ -29,7 +29,13 @@ public class AtsAnalysisEntity {
     private Long resumeId;
 
     @Column(name = "analysis_mode", nullable = false, length = 50)
-    private String analysisMode; // "OVERALL" or "JOB_SPECIFIC"
+    private String analysisMode; // "UNIVERSAL" / "OVERALL" or "JOB_SPECIFIC"
+
+    @Column(name = "target_role", length = 100)
+    private String targetRole;
+
+    @Column(name = "analysis_status", length = 50)
+    private String analysisStatus; // "ANALYSIS_COMPLETE", "PARTIAL_ANALYSIS", "ANALYSIS_UNAVAILABLE"
 
     @Column(name = "job_title")
     private String jobTitle;
@@ -49,34 +55,55 @@ public class AtsAnalysisEntity {
     @Column(name = "extraction_confidence")
     private Double extractionConfidence;
 
+    @Column(name = "confidence_score")
+    private Integer confidenceScore; // 0-100%
+
     @Column(name = "overall_score")
-    private Integer overallScore;
+    private Integer overallScore; // 0-100
+
+    @Column(name = "score_label", length = 50)
+    private String scoreLabel; // "Excellent", "Strong", "Good Foundation", etc.
 
     @Column(name = "job_match_score")
     private Integer jobMatchScore;
 
-    // Mode 1: Overall Scores
+    // Mode 1: 7 Category Scores
+    @Column(name = "parsability_score")
+    private Integer parsabilityScore; // 0-15
+
     @Column(name = "completeness_score")
     private Integer completenessScore; // 0-20
 
-    @Column(name = "ats_compatibility_score")
-    private Integer atsCompatibilityScore; // 0-15
+    @Column(name = "contact_score")
+    private Integer contactScore; // 0-10
 
     @Column(name = "skills_score")
-    private Integer skillsScore; // 0-20
+    private Integer skillsScore; // 0-15
 
     @Column(name = "experience_score")
     private Integer experienceScore; // 0-20
 
+    @Column(name = "readability_score")
+    private Integer readabilityScore; // 0-10
+
+    @Column(name = "achievements_score")
+    private Integer achievementsScore; // 0-10
+
+    // Legacy / Mode 2: Job Match Scores
+    @Column(name = "ats_compatibility_score")
+    private Integer atsCompatibilityScore; // backward compat
+
     @Column(name = "impact_score")
-    private Integer impactScore; // 0-15
+    private Integer impactScore; // backward compat
 
     @Column(name = "language_score")
-    private Integer languageScore; // 0-10
+    private Integer languageScore; // backward compat
 
-    // Mode 2: Job Match Scores
     @Column(name = "required_skills_score")
     private Integer requiredSkillsScore; // 0-30
+
+    @Column(name = "preferred_skills_score")
+    private Integer preferredSkillsScore; // 0-10
 
     @Column(name = "keyword_score")
     private Integer keywordScore; // 0-20
@@ -90,6 +117,7 @@ public class AtsAnalysisEntity {
     @Column(name = "semantic_score")
     private Integer semanticScore; // 0-20
 
+    // JSON Storage
     @Column(name = "matched_skills_json", columnDefinition = "TEXT")
     private String matchedSkillsJson;
 
@@ -107,6 +135,12 @@ public class AtsAnalysisEntity {
 
     @Column(name = "breakdown_json", columnDefinition = "TEXT")
     private String breakdownJson;
+
+    @Column(name = "evidence_json", columnDefinition = "TEXT")
+    private String evidenceJson;
+
+    @Column(name = "quick_wins_json", columnDefinition = "TEXT")
+    private String quickWinsJson;
 
     @Column(name = "strengths_json", columnDefinition = "TEXT")
     private String strengthsJson;

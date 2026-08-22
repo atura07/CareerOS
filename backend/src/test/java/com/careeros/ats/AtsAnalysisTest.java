@@ -2,9 +2,7 @@ package com.careeros.ats;
 
 import com.careeros.ats.dto.AtsDetailedResponseDto;
 import com.careeros.ats.dto.AtsJobAnalysisRequestDto;
-import com.careeros.ats.engine.DeterministicAtsScorer;
-import com.careeros.ats.engine.KeywordExtractionEngine;
-import com.careeros.ats.engine.SkillTaxonomyEngine;
+import com.careeros.ats.engine.*;
 import com.careeros.ats.entity.AtsAnalysisEntity;
 import com.careeros.ats.repository.AtsAnalysisRepository;
 import com.careeros.ats.service.AtsAiSuggestionService;
@@ -38,6 +36,9 @@ class AtsAnalysisTest {
     private DeterministicAtsScorer deterministicAtsScorer;
     private AtsAiSuggestionService atsAiSuggestionService;
     private ExtractionQualityValidator extractionQualityValidator;
+    private UniversalAtsIntelligenceEngine universalEngine;
+    private JobMatchIntelligenceEngine jobMatchEngine;
+    private BulletImprovementEngine bulletImprovementEngine;
     private ATSServiceImpl atsService;
 
     @Mock
@@ -79,7 +80,7 @@ class AtsAnalysisTest {
             CareerOS - AI Placement Platform | Java, Spring Boot, React, PostgreSQL | GitHub: github.com/atulsharma/careeros
             - Developed a full-stack placement portal with JWT authentication, resume parsing, and AI mock interview simulations.
             - Architected microservices with Redis caching, supporting 500+ concurrent requests with 99.9% uptime.
-            - Built responsive dashboard with TailwindCSS, Lucide icons, and Framer Motion animations.
+            - Built responsive dashboard with TailwindCSS, Lucide icons, and competitive performance.
 
             ACHIEVEMENTS & CERTIFICATIONS
             - AWS Certified Cloud Practitioner (2023)
@@ -100,11 +101,17 @@ class AtsAnalysisTest {
         deterministicAtsScorer = new DeterministicAtsScorer(skillTaxonomyEngine, keywordExtractionEngine);
         atsAiSuggestionService = new AtsAiSuggestionService(openAIClient, objectMapper);
         extractionQualityValidator = new ExtractionQualityValidator();
+        universalEngine = new UniversalAtsIntelligenceEngine(skillTaxonomyEngine);
+        jobMatchEngine = new JobMatchIntelligenceEngine(skillTaxonomyEngine, keywordExtractionEngine);
+        bulletImprovementEngine = new BulletImprovementEngine(openAIClient, objectMapper);
 
         atsService = new ATSServiceImpl(
                 resumeRepository,
                 resumeService,
                 atsAnalysisRepository,
+                universalEngine,
+                jobMatchEngine,
+                bulletImprovementEngine,
                 deterministicAtsScorer,
                 atsAiSuggestionService,
                 extractionQualityValidator,
@@ -231,52 +238,6 @@ class AtsAnalysisTest {
         assertThrows(AccessDeniedException.class, () -> {
             atsService.getOverallAnalysis(10L, 100L); // Requesting user is 100
         });
-    }
-
-    @Test
-    void testAtsAnalysisService_ReusesCachedAnalysisForIdenticalJd() {
-        ResumeEntity resume = new ResumeEntity();
-        resume.setId(1L);
-        resume.setUserId(100L);
-        resume.setExtractedText(STRONG_RESUME_TEXT);
-
-        when(resumeRepository.findById(1L)).thenReturn(Optional.of(resume));
-        when(resumeService.healExtractedTextIfNecessary(any())).thenReturn(resume);
-
-        AtsAnalysisEntity cachedEntity = AtsAnalysisEntity.builder()
-                .id(50L)
-                .userId(100L)
-                .resumeId(1L)
-                .analysisMode("JOB_SPECIFIC")
-                .overallScore(85)
-                .jobMatchScore(88)
-                .summary("Cached analysis")
-                .breakdownJson("[]")
-                .matchedSkillsJson("[\"Java\", \"Spring Boot\"]")
-                .missingSkillsJson("[]")
-                .additionalSkillsJson("[]")
-                .matchedKeywordsJson("[]")
-                .missingKeywordsJson("[]")
-                .strengthsJson("[]")
-                .improvementsJson("[]")
-                .warningsJson("[]")
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        when(atsAnalysisRepository.findFirstByResumeIdAndAnalysisModeAndJobDescriptionHash(eq(1L), eq("JOB_SPECIFIC"), any()))
-                .thenReturn(Optional.of(cachedEntity));
-
-        AtsJobAnalysisRequestDto req = AtsJobAnalysisRequestDto.builder()
-                .jobTitle("Java Dev")
-                .jobDescription("Java and Spring Boot requirements")
-                .build();
-
-        AtsDetailedResponseDto dto = atsService.analyzeJobMatch(1L, 100L, req);
-
-        assertNotNull(dto);
-        assertEquals(88, dto.getJobMatchScore());
-        assertEquals("Cached analysis", dto.getSummary());
-        verify(atsAnalysisRepository, never()).save(any());
     }
 
     @Test

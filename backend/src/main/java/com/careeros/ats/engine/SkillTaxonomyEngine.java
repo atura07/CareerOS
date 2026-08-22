@@ -50,7 +50,7 @@ public class SkillTaxonomyEngine {
         addSkill("C", SkillCategory.PROGRAMMING_LANGUAGES, List.of("c language"),
                 "(?<![a-zA-Z0-9#+])c(?![a-zA-Z0-9#+]|\\s*\\+|\\s*plus|\\s*#|\\s*sharp)");
         addSkill("C#", SkillCategory.PROGRAMMING_LANGUAGES, List.of("c#", "csharp", "c sharp"),
-                "(\\bc#\\b|\\bcsharp\\b|\\bc\\s+sharp\\b)");
+                "(\\bc#(?![a-zA-Z0-9#])|\\bcsharp\\b|\\bc\\s+sharp\\b)");
         addSkill("JavaScript", SkillCategory.PROGRAMMING_LANGUAGES, List.of("javascript", "ecmascript", "es6", "vanilla js"),
                 "(?<!react|node|next|vue|nest|express|angular|three|d3|chart)[.\\s]?(javascript|ecmascript|es6|vanilla js)\\b|(?<![a-zA-Z0-9.-])js(?![a-zA-Z0-9.-])");
         addSkill("TypeScript", SkillCategory.PROGRAMMING_LANGUAGES, List.of("typescript", "ts"),
@@ -103,8 +103,8 @@ public class SkillTaxonomyEngine {
                 "\\b(flask)\\b");
         addSkill("FastAPI", SkillCategory.WEB_AND_FRAMEWORKS, List.of("fastapi", "fast api"),
                 "\\b(fastapi|fast api)\\b");
-        addSkill("ASP.NET", SkillCategory.WEB_AND_FRAMEWORKS, List.of("asp.net", "asp.net core", ".net core", "dot net"),
-                "\\b(asp\\.net|asp\\.net core|\\.net core|dot net)\\b");
+        addSkill(".NET", SkillCategory.WEB_AND_FRAMEWORKS, List.of(".net", ".net core", "dotnet", "dot net", "asp.net", "asp.net core"),
+                "((?<![a-zA-Z0-9])\\.net(?![a-zA-Z0-9])|\\bdotnet\\b|\\bdot\\s+net\\b|\\basp\\.net(?![a-zA-Z0-9])|\\bnet\\s+core\\b)");
         addSkill("Ruby on Rails", SkillCategory.WEB_AND_FRAMEWORKS, List.of("ruby on rails", "rails"),
                 "\\b(ruby on rails|rails)\\b");
         addSkill("NestJS", SkillCategory.WEB_AND_FRAMEWORKS, List.of("nestjs", "nest.js"),
@@ -114,7 +114,7 @@ public class SkillTaxonomyEngine {
         addSkill("Bootstrap", SkillCategory.WEB_AND_FRAMEWORKS, List.of("bootstrap", "bootstrap 5"),
                 "\\b(bootstrap|bootstrap 5)\\b");
         addSkill("REST APIs", SkillCategory.WEB_AND_FRAMEWORKS, List.of("rest api", "rest apis", "restful api", "restful apis"),
-                "\\b(rest api|rest apis|restful api|restful apis|rest web services)\\b");
+                "\\b(rest\\s*apis?|restful\\s*apis?|rest\\s+web\\s+services)\\b");
         addSkill("GraphQL", SkillCategory.WEB_AND_FRAMEWORKS, List.of("graphql", "graph ql"),
                 "\\b(graphql|graph ql)\\b");
         addSkill("Microservices", SkillCategory.WEB_AND_FRAMEWORKS, List.of("microservices", "microservice architecture", "micro-services"),

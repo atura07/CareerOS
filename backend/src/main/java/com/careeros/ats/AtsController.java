@@ -1,7 +1,6 @@
 package com.careeros.ats;
 
-import com.careeros.ats.dto.AtsDetailedResponseDto;
-import com.careeros.ats.dto.AtsJobAnalysisRequestDto;
+import com.careeros.ats.dto.*;
 import com.careeros.resume.ResumeResponse;
 import com.careeros.resume.ResumeService;
 import com.careeros.user.User;
@@ -13,6 +12,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/ats")
@@ -36,7 +37,70 @@ public class AtsController {
     }
 
     /**
-     * MODE 1: Get or calculate deterministic Overall ATS Readiness Score for a resume.
+     * MODE 1: Universal ATS Intelligence with role benchmarking and 7-category breakdown.
+     */
+    @GetMapping("/resumes/{resumeId}/intelligence")
+    public ResponseEntity<AtsIntelligenceDto> getUniversalIntelligence(
+            @PathVariable Long resumeId,
+            @RequestParam(value = "targetRole", required = false, defaultValue = "Software Engineer") String targetRole,
+            @AuthenticationPrincipal Object principal,
+            Authentication authentication) {
+
+        Long userId = resolveUserId(principal, authentication);
+        log.info("GET /api/v1/ats/resumes/{}/intelligence — userId={}, targetRole={}", resumeId, userId, targetRole);
+
+        AtsIntelligenceDto response = atsAnalysisService.getUniversalIntelligence(resumeId, userId, targetRole);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * MODE 2: Job-Specific ATS Match Intelligence against Job Description.
+     */
+    @PostMapping("/resumes/{resumeId}/job-match")
+    public ResponseEntity<AtsIntelligenceDto> analyzeJobMatchIntelligence(
+            @PathVariable Long resumeId,
+            @RequestBody AtsJobAnalysisRequestDto request,
+            @AuthenticationPrincipal Object principal,
+            Authentication authentication) {
+
+        Long userId = resolveUserId(principal, authentication);
+        log.info("POST /api/v1/ats/resumes/{}/job-match — userId={}, jobTitle={}",
+                resumeId, userId, request != null ? request.getJobTitle() : "N/A");
+
+        AtsIntelligenceDto response = atsAnalysisService.analyzeJobMatchIntelligence(resumeId, userId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Interactive Bullet Point Improver.
+     */
+    @PostMapping("/bullet/improve")
+    public ResponseEntity<BulletImprovementResponseDto> improveBullet(
+            @RequestBody BulletImprovementRequestDto request) {
+
+        log.info("POST /api/v1/ats/bullet/improve — role={}", request != null ? request.getTargetRole() : "N/A");
+        BulletImprovementResponseDto response = atsAnalysisService.improveBullet(request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Real Historical Analysis Timeline.
+     */
+    @GetMapping("/resumes/{resumeId}/history")
+    public ResponseEntity<List<AtsIntelligenceDto>> getResumeAnalysisHistory(
+            @PathVariable Long resumeId,
+            @AuthenticationPrincipal Object principal,
+            Authentication authentication) {
+
+        Long userId = resolveUserId(principal, authentication);
+        log.info("GET /api/v1/ats/resumes/{}/history — userId={}", resumeId, userId);
+
+        List<AtsIntelligenceDto> history = atsAnalysisService.getResumeAnalysisHistory(resumeId, userId);
+        return ResponseEntity.ok(history);
+    }
+
+    /**
+     * Backward-compatible Overall ATS Readiness.
      */
     @GetMapping("/resumes/{resumeId}/overall")
     public ResponseEntity<AtsDetailedResponseDto> getOverallAts(
@@ -52,7 +116,7 @@ public class AtsController {
     }
 
     /**
-     * MODE 2: Analyze resume against a specific Job Description.
+     * Backward-compatible analyze-job endpoint.
      */
     @PostMapping("/resumes/{resumeId}/analyze-job")
     public ResponseEntity<AtsDetailedResponseDto> analyzeJobMatch(
@@ -62,8 +126,7 @@ public class AtsController {
             Authentication authentication) {
 
         Long userId = resolveUserId(principal, authentication);
-        log.info("POST /api/v1/ats/resumes/{}/analyze-job — userId={}, jobTitle={}",
-                resumeId, userId, request != null ? request.getJobTitle() : "N/A");
+        log.info("POST /api/v1/ats/resumes/{}/analyze-job — userId={}", resumeId, userId);
 
         AtsDetailedResponseDto response = atsAnalysisService.analyzeJobMatch(resumeId, userId, request);
         return ResponseEntity.ok(response);
@@ -94,9 +157,6 @@ public class AtsController {
      */
     @PostMapping("/analyze/text")
     public ResponseEntity<AtsResponse> analyzeText(@RequestBody AnalyzeTextRequest request) {
-        log.info("POST /api/v1/ats/analyze/text — textLength={}",
-                request.text() != null ? request.text().length() : 0);
-
         AtsResponse response = atsService.analyzeText(request.text());
         return ResponseEntity.ok(response);
     }
@@ -107,8 +167,6 @@ public class AtsController {
     @PostMapping(value = {"/api/ats/analyze", "/analyze-job-legacy"})
     public ResponseEntity<ATSAnalysisResponse> analyzeResumeAgainstJobDescription(
             @RequestBody ATSAnalysisRequest request) {
-
-        log.info("POST /api/v1/ats/api/ats/analyze — resumeId={}", request.getResumeId());
 
         ATSAnalysisResponse response = atsAnalysisService.analyze(
                 request.getResumeId(),

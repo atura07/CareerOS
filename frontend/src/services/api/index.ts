@@ -29,11 +29,25 @@ export {
   analyzeResumeAgainstJobDescription,
   getOverallAts,
   analyzeJobMatch,
+  getUniversalIntelligence,
+  analyzeJobMatchIntelligence,
+  improveBullet,
+  getResumeAnalysisHistory,
 } from './atsService'
 export type {
   AtsDetailedResponse,
   CategoryBreakdown,
   AtsJobAnalysisRequest,
+  AtsIntelligenceResponse,
+  CategoryDetail,
+  ActionableIssue,
+  DetailedRecommendation,
+  SuggestedKeywordItem,
+  KeywordIntelligence,
+  JobMatchDetails,
+  HistoryComparison,
+  BulletImprovementRequest,
+  BulletImprovementResponse,
 } from './atsService'
 export {
   getCompanies,
@@ -105,5 +119,3 @@ export type {
   ProfileCompletionData,
   ConsistencyData,
 } from './dashboardService'
-
-

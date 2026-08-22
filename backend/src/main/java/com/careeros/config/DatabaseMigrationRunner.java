@@ -302,6 +302,17 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
             ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS extraction_status VARCHAR(50);
             ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS extraction_method VARCHAR(50);
             ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS extraction_confidence DOUBLE PRECISION;
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS target_role VARCHAR(100);
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS analysis_status VARCHAR(50);
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS confidence_score INT;
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS parsability_score INT;
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS contact_score INT;
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS readability_score INT;
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS achievements_score INT;
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS preferred_skills_score INT;
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS evidence_json TEXT;
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS quick_wins_json TEXT;
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS score_label VARCHAR(50);
         """;
 
         try (Connection conn = dataSource.getConnection();

@@ -16,6 +16,8 @@ public interface AtsAnalysisRepository extends JpaRepository<AtsAnalysisEntity, 
 
     Optional<AtsAnalysisEntity> findFirstByResumeIdAndAnalysisModeOrderByCreatedAtDesc(Long resumeId, String analysisMode);
 
+    List<AtsAnalysisEntity> findTop2ByResumeIdAndAnalysisModeOrderByCreatedAtDesc(Long resumeId, String analysisMode);
+
     Optional<AtsAnalysisEntity> findFirstByResumeIdAndAnalysisModeAndJobDescriptionHash(
             Long resumeId, String analysisMode, String jobDescriptionHash);
 }

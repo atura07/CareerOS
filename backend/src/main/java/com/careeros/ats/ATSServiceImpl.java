@@ -1,8 +1,10 @@
 package com.careeros.ats;
 
-import com.careeros.ats.dto.AtsDetailedResponseDto;
-import com.careeros.ats.dto.AtsJobAnalysisRequestDto;
+import com.careeros.ats.dto.*;
+import com.careeros.ats.engine.BulletImprovementEngine;
 import com.careeros.ats.engine.DeterministicAtsScorer;
+import com.careeros.ats.engine.JobMatchIntelligenceEngine;
+import com.careeros.ats.engine.UniversalAtsIntelligenceEngine;
 import com.careeros.ats.entity.AtsAnalysisEntity;
 import com.careeros.ats.repository.AtsAnalysisRepository;
 import com.careeros.ats.service.AtsAiSuggestionService;
@@ -10,6 +12,7 @@ import com.careeros.resume.ResumeEntity;
 import com.careeros.resume.ResumeNotFoundException;
 import com.careeros.resume.ResumeRepository;
 import com.careeros.resume.ResumeService;
+import com.careeros.resume.extraction.ExtractedResumeContent;
 import com.careeros.resume.extraction.ExtractionQualityValidator;
 import com.careeros.resume.extraction.ExtractionStatus;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -35,6 +38,9 @@ public class ATSServiceImpl implements AtsAnalysisService {
     private final ResumeRepository resumeRepository;
     private final ResumeService resumeService;
     private final AtsAnalysisRepository atsAnalysisRepository;
+    private final UniversalAtsIntelligenceEngine universalAtsEngine;
+    private final JobMatchIntelligenceEngine jobMatchEngine;
+    private final BulletImprovementEngine bulletImprovementEngine;
     private final DeterministicAtsScorer deterministicAtsScorer;
     private final AtsAiSuggestionService atsAiSuggestionService;
     private final ExtractionQualityValidator extractionQualityValidator;
@@ -42,112 +48,130 @@ public class ATSServiceImpl implements AtsAnalysisService {
 
     @Override
     @Transactional
-    public AtsDetailedResponseDto getOverallAnalysis(Long resumeId, Long userId) {
-        log.info("[ATS] getOverallAnalysis for resumeId={}, userId={}", resumeId, userId);
+    public AtsIntelligenceDto getUniversalIntelligence(Long resumeId, Long userId, String targetRole) {
+        log.info("[ATS-INTELLIGENCE] getUniversalIntelligence resumeId={}, userId={}, role={}", resumeId, userId, targetRole);
 
         ResumeEntity resume = fetchAndValidateResume(resumeId, userId);
-
-        // Multi-stage extraction healing if text is missing, empty, or previously marked as failed
         resume = resumeService.healExtractedTextIfNecessary(resume);
         String extractedText = resume.getExtractedText();
 
-        if (extractedText == null || extractedText.isBlank() || extractedText.startsWith("[Parsing failed")) {
-            log.warn("[ATS] Unreadable resume text for resumeId={}", resumeId);
-            return AtsDetailedResponseDto.builder()
-                    .analysisMode("OVERALL")
-                    .resumeId(resumeId)
-                    .extractionStatus(ExtractionStatus.FAILED.name())
-                    .extractionMethod("NONE")
-                    .extractionConfidence(0.0)
-                    .overallScore(0)
-                    .readinessLevel("Needs significant improvement")
-                    .summary("We could not extract readable text from this resume. All text and OCR extraction stages failed. Please upload a clear PDF or DOCX.")
-                    .breakdown(Collections.emptyList())
-                    .matchedSkills(Collections.emptyList())
-                    .missingSkills(Collections.emptyList())
-                    .additionalResumeSkills(Collections.emptyList())
-                    .matchedKeywords(Collections.emptyList())
-                    .missingKeywords(Collections.emptyList())
-                    .keywordMatchPercentage(0.0)
-                    .strengths(Collections.emptyList())
-                    .improvements(List.of("Upload a clean, text-based PDF or DOCX file to enable full ATS analysis."))
-                    .warnings(List.of("Unreadable document or corrupted file detected."))
-                    .analyzedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
-                    .build();
-        }
-
-        // Check for cached overall analysis
-        Optional<AtsAnalysisEntity> cachedOpt = atsAnalysisRepository
-                .findFirstByResumeIdAndAnalysisModeOrderByCreatedAtDesc(resumeId, "OVERALL");
-
-        if (cachedOpt.isPresent()) {
-            AtsAnalysisEntity cached = cachedOpt.get();
-            if (cached.getCreatedAt() != null && cached.getOverallScore() != null) {
-                log.info("[ATS] Returning cached overall analysis for resumeId={}", resumeId);
-                return mapEntityToDto(cached);
-            }
-        }
-
-        // Assess extraction quality
+        // 1. Build Extraction Telemetry
         ExtractionQualityValidator.QualityAssessment quality = extractionQualityValidator.assess(extractedText);
         String extractionMethod = "docx".equalsIgnoreCase(resume.getFileType()) ? "POI_DOCX" : "PDFBOX_DIRECT";
         if (quality.status() == ExtractionStatus.OCR_USED) {
             extractionMethod = "OCR_FALLBACK";
         }
 
-        // Perform deterministic analysis
-        DeterministicAtsScorer.OverallScoreResult scoreResult = deterministicAtsScorer.scoreOverallResume(extractedText);
+        ExtractedResumeContent telemetry = ExtractedResumeContent.builder()
+                .rawText(extractedText != null ? extractedText : "")
+                .cleanText(extractedText != null ? extractedText : "")
+                .characterCount(extractedText != null ? extractedText.length() : 0)
+                .wordCount(quality.wordCount())
+                .alphaRatio(quality.alphaRatio())
+                .extractionStatus(quality.status())
+                .extractionMethod(com.careeros.resume.extraction.ExtractionMethod.valueOf(extractionMethod))
+                .confidenceScore(quality.confidence())
+                .detectedSections(quality.detectedSections())
+                .warnings(quality.warnings())
+                .build();
 
-        // Enrich suggestions with AI if available
-        List<String> contextualSuggestions = atsAiSuggestionService.generateContextualSuggestions(
-                scoreResult.overallScore(),
-                null,
-                new ArrayList<>(scoreResult.skillsResult().getNormalizedSkills()),
-                Collections.emptyList(),
-                scoreResult.breakdown(),
-                scoreResult.improvements()
-        );
+        // 2. Perform Universal 7-Category Evaluation
+        UniversalAtsIntelligenceEngine.UniversalAnalysisResult result = universalAtsEngine.analyze(extractedText, telemetry, targetRole);
 
-        String summary = scoreResult.readinessLevel() + " (" + scoreResult.overallScore() + "/100). "
-                + (scoreResult.strengths().isEmpty() ? "Add measurable achievements to boost your score." : scoreResult.strengths().get(0));
+        // 3. Compute Real Historical Comparison (if previous analysis exists)
+        List<AtsAnalysisEntity> pastAnalyses = atsAnalysisRepository.findTop2ByResumeIdAndAnalysisModeOrderByCreatedAtDesc(resumeId, "UNIVERSAL");
+        AtsIntelligenceDto.HistoryComparisonDto historyComparison = null;
 
-        // Persist to database
+        if (!pastAnalyses.isEmpty()) {
+            AtsAnalysisEntity previous = pastAnalyses.get(0);
+            if (previous.getOverallScore() != null) {
+                int delta = result.overallScore() - previous.getOverallScore();
+                List<String> improvements = new ArrayList<>();
+                List<String> regressions = new ArrayList<>();
+                List<String> unchanged = new ArrayList<>();
+
+                if (delta > 0) improvements.add("Overall ATS Compatibility improved by +" + delta + " points.");
+                else if (delta < 0) regressions.add("Overall ATS Compatibility shifted by " + delta + " points.");
+                else unchanged.add("Score remained consistent across recent revisions.");
+
+                historyComparison = AtsIntelligenceDto.HistoryComparisonDto.builder()
+                        .previousOverallScore(previous.getOverallScore())
+                        .scoreDelta(delta)
+                        .previousAnalyzedAt(previous.getCreatedAt() != null ? previous.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : "")
+                        .improvements(improvements)
+                        .regressions(regressions)
+                        .unchanged(unchanged)
+                        .build();
+            }
+        }
+
+        // 4. Persist Analysis Entity
         AtsAnalysisEntity entity = AtsAnalysisEntity.builder()
                 .userId(userId)
                 .resumeId(resumeId)
-                .analysisMode("OVERALL")
+                .analysisMode("UNIVERSAL")
+                .targetRole(targetRole)
+                .analysisStatus(result.analysisStatus())
                 .extractionStatus(quality.status().name())
                 .extractionMethod(extractionMethod)
                 .extractionConfidence(quality.confidence())
-                .overallScore(scoreResult.overallScore())
-                .completenessScore(scoreResult.completenessScore())
-                .atsCompatibilityScore(scoreResult.atsCompatibilityScore())
-                .skillsScore(scoreResult.skillsScore())
-                .experienceScore(scoreResult.experienceScore())
-                .impactScore(scoreResult.impactScore())
-                .languageScore(scoreResult.languageScore())
-                .matchedSkillsJson(toJson(new ArrayList<>(scoreResult.skillsResult().getNormalizedSkills())))
-                .missingSkillsJson(toJson(Collections.emptyList()))
-                .additionalSkillsJson(toJson(new ArrayList<>(scoreResult.skillsResult().getNormalizedSkills())))
-                .matchedKeywordsJson(toJson(Collections.emptyList()))
-                .missingKeywordsJson(toJson(Collections.emptyList()))
-                .breakdownJson(toJson(scoreResult.breakdown()))
-                .strengthsJson(toJson(scoreResult.strengths()))
-                .improvementsJson(toJson(contextualSuggestions))
-                .warningsJson(toJson(scoreResult.warnings()))
-                .summary(summary)
+                .confidenceScore(result.confidence())
+                .overallScore(result.overallScore())
+                .scoreLabel(result.scoreLabel())
+                .parsabilityScore(getCatScore(result.categories(), "Parsability & Document Health"))
+                .completenessScore(getCatScore(result.categories(), "Core Section Completeness"))
+                .contactScore(getCatScore(result.categories(), "Contact & Professional Identity"))
+                .skillsScore(getCatScore(result.categories(), "Skills & Technical Signals"))
+                .experienceScore(getCatScore(result.categories(), "Experience & Project Quality"))
+                .readabilityScore(getCatScore(result.categories(), "Readability & ATS Safety"))
+                .achievementsScore(getCatScore(result.categories(), "Achievements & Profile Strength"))
+                .breakdownJson(toJson(result.categories()))
+                .strengthsJson(toJson(result.strengths()))
+                .improvementsJson(toJson(result.detailedRecommendations()))
+                .quickWinsJson(toJson(result.quickWins()))
+                .matchedSkillsJson(toJson(result.keywordIntelligence().getMatched()))
+                .missingSkillsJson(toJson(result.keywordIntelligence().getMissing()))
+                .summary(result.summary().getDescription())
                 .build();
 
         AtsAnalysisEntity saved = atsAnalysisRepository.save(entity);
-        log.info("[ATS] Saved overall ATS analysis id={} for resumeId={}", saved.getId(), resumeId);
+        log.info("[ATS-INTELLIGENCE] Saved universal analysis id={} for resumeId={}", saved.getId(), resumeId);
 
-        return mapEntityToDto(saved);
+        // 5. Map to DTO
+        return AtsIntelligenceDto.builder()
+                .analysisId(String.valueOf(saved.getId()))
+                .resumeId(resumeId)
+                .mode("UNIVERSAL")
+                .targetRole(targetRole)
+                .analysisStatus(result.analysisStatus())
+                .overallScore(result.overallScore())
+                .scoreLabel(result.scoreLabel())
+                .confidence(result.confidence())
+                .confidenceMessage(result.confidenceMessage())
+                .extraction(AtsIntelligenceDto.ExtractionTelemetryDto.builder()
+                        .status(quality.status().name())
+                        .method(extractionMethod)
+                        .confidence(quality.confidence())
+                        .characterCount(telemetry.getCharacterCount())
+                        .wordCount(quality.wordCount())
+                        .alphaRatio(quality.alphaRatio())
+                        .build())
+                .summary(result.summary())
+                .scoreBreakdown(result.categories())
+                .strengths(result.strengths())
+                .criticalIssues(result.criticalIssues())
+                .quickWins(result.quickWins())
+                .detailedRecommendations(result.detailedRecommendations())
+                .keywordAnalysis(result.keywordIntelligence())
+                .historyComparison(historyComparison)
+                .analyzedAt(saved.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+                .build();
     }
 
     @Override
     @Transactional
-    public AtsDetailedResponseDto analyzeJobMatch(Long resumeId, Long userId, AtsJobAnalysisRequestDto request) {
-        log.info("[ATS] analyzeJobMatch for resumeId={}, userId={}, jobTitle={}",
+    public AtsIntelligenceDto analyzeJobMatchIntelligence(Long resumeId, Long userId, AtsJobAnalysisRequestDto request) {
+        log.info("[ATS-INTELLIGENCE] analyzeJobMatchIntelligence resumeId={}, userId={}, role={}",
                 resumeId, userId, request != null ? request.getJobTitle() : "N/A");
 
         ResumeEntity resume = fetchAndValidateResume(resumeId, userId);
@@ -155,112 +179,175 @@ public class ATSServiceImpl implements AtsAnalysisService {
         String extractedText = resume.getExtractedText();
 
         if (request == null || request.getJobDescription() == null || request.getJobDescription().trim().isBlank()) {
-            throw new IllegalArgumentException("Job Description is required for job-specific match analysis.");
+            throw new IllegalArgumentException("Job Description is required for job match analysis.");
         }
 
         String rawJd = request.getJobDescription().trim();
         String jdHash = hashSha256(rawJd);
 
-        // Check for cached analysis of identical resume + JD
-        Optional<AtsAnalysisEntity> cachedOpt = atsAnalysisRepository
-                .findFirstByResumeIdAndAnalysisModeAndJobDescriptionHash(resumeId, "JOB_SPECIFIC", jdHash);
-
-        if (cachedOpt.isPresent()) {
-            log.info("[ATS] Returning cached job match analysis for resumeId={} and jdHash={}", resumeId, jdHash);
-            return mapEntityToDto(cachedOpt.get());
-        }
-
-        // Assess extraction quality
+        // 1. Run Universal baseline
         ExtractionQualityValidator.QualityAssessment quality = extractionQualityValidator.assess(extractedText);
         String extractionMethod = "docx".equalsIgnoreCase(resume.getFileType()) ? "POI_DOCX" : "PDFBOX_DIRECT";
-        if (quality.status() == ExtractionStatus.OCR_USED) {
-            extractionMethod = "OCR_FALLBACK";
-        }
+        if (quality.status() == ExtractionStatus.OCR_USED) extractionMethod = "OCR_FALLBACK";
 
-        // Perform deterministic analysis for both Overall and Job Match
-        DeterministicAtsScorer.OverallScoreResult overallResult = deterministicAtsScorer.scoreOverallResume(extractedText);
-        DeterministicAtsScorer.JobMatchResult jobResult = deterministicAtsScorer.scoreJobMatch(extractedText, rawJd);
+        ExtractedResumeContent telemetry = ExtractedResumeContent.builder()
+                .cleanText(extractedText != null ? extractedText : "")
+                .characterCount(extractedText != null ? extractedText.length() : 0)
+                .wordCount(quality.wordCount())
+                .alphaRatio(quality.alphaRatio())
+                .extractionStatus(quality.status())
+                .extractionMethod(com.careeros.resume.extraction.ExtractionMethod.valueOf(extractionMethod))
+                .confidenceScore(quality.confidence())
+                .build();
 
-        // Enrich suggestions with AI
-        List<String> contextualSuggestions = atsAiSuggestionService.generateContextualSuggestions(
-                overallResult.overallScore(),
-                jobResult.jobMatchScore(),
-                jobResult.matchedSkills(),
-                jobResult.missingSkills(),
-                jobResult.breakdown(),
-                jobResult.improvements()
-        );
+        UniversalAtsIntelligenceEngine.UniversalAnalysisResult universal = universalAtsEngine.analyze(
+                extractedText, telemetry, request.getJobTitle());
 
-        String summary = String.format("%s (%d/100) for %s%s. Matched %d key technical skills.",
-                jobResult.matchLevel(),
-                jobResult.jobMatchScore(),
-                request.getJobTitle() != null && !request.getJobTitle().isBlank() ? request.getJobTitle() : "Target Role",
-                request.getCompanyName() != null && !request.getCompanyName().isBlank() ? " at " + request.getCompanyName() : "",
-                jobResult.matchedSkills().size()
-        );
+        // 2. Run Job Match Engine
+        JobMatchIntelligenceEngine.JobMatchResult jobMatch = jobMatchEngine.evaluate(
+                extractedText, rawJd, request.getJobTitle(), request.getCompanyName());
 
+        // 3. Persist Entity
         AtsAnalysisEntity entity = AtsAnalysisEntity.builder()
                 .userId(userId)
                 .resumeId(resumeId)
-                .analysisMode("JOB_SPECIFIC")
+                .analysisMode("JOB_MATCH")
                 .jobTitle(request.getJobTitle())
                 .companyName(request.getCompanyName())
                 .jobDescriptionHash(jdHash)
+                .analysisStatus("ANALYSIS_COMPLETE")
                 .extractionStatus(quality.status().name())
                 .extractionMethod(extractionMethod)
                 .extractionConfidence(quality.confidence())
-                .overallScore(overallResult.overallScore())
-                .jobMatchScore(jobResult.jobMatchScore())
-                .completenessScore(overallResult.completenessScore())
-                .atsCompatibilityScore(overallResult.atsCompatibilityScore())
-                .skillsScore(overallResult.skillsScore())
-                .experienceScore(overallResult.experienceScore())
-                .impactScore(overallResult.impactScore())
-                .languageScore(overallResult.languageScore())
-                .requiredSkillsScore(jobResult.requiredSkillsScore())
-                .keywordScore(jobResult.keywordScore())
-                .responsibilityScore(jobResult.responsibilityScore())
-                .eligibilityScore(jobResult.eligibilityScore())
-                .semanticScore(jobResult.semanticScore())
-                .matchedSkillsJson(toJson(jobResult.matchedSkills()))
-                .missingSkillsJson(toJson(jobResult.missingSkills()))
-                .additionalSkillsJson(toJson(jobResult.additionalResumeSkills()))
-                .matchedKeywordsJson(toJson(jobResult.matchedKeywords()))
-                .missingKeywordsJson(toJson(jobResult.missingKeywords()))
-                .breakdownJson(toJson(jobResult.breakdown()))
-                .strengthsJson(toJson(jobResult.strengths()))
-                .improvementsJson(toJson(contextualSuggestions))
-                .warningsJson(toJson(overallResult.warnings()))
-                .summary(summary)
+                .confidenceScore(universal.confidence())
+                .overallScore(universal.overallScore())
+                .scoreLabel(universal.scoreLabel())
+                .jobMatchScore(jobMatch.jobMatchScore())
+                .requiredSkillsScore(jobMatch.requiredSkillsScore())
+                .preferredSkillsScore(jobMatch.preferredSkillsScore())
+                .experienceScore(jobMatch.experienceScore())
+                .eligibilityScore(jobMatch.educationScore())
+                .semanticScore(jobMatch.semanticScore())
+                .matchedSkillsJson(toJson(jobMatch.matchedRequiredSkills()))
+                .missingSkillsJson(toJson(jobMatch.missingRequiredSkills()))
+                .breakdownJson(toJson(jobMatch.categories()))
+                .strengthsJson(toJson(jobMatch.strengths()))
+                .summary(jobMatch.summary().getDescription())
                 .build();
 
         AtsAnalysisEntity saved = atsAnalysisRepository.save(entity);
-        log.info("[ATS] Saved job-specific ATS analysis id={} for resumeId={}", saved.getId(), resumeId);
+        log.info("[ATS-INTELLIGENCE] Saved job match analysis id={} for resumeId={}", saved.getId(), resumeId);
 
-        return mapEntityToDto(saved);
+        // 4. Build DTO
+        AtsIntelligenceDto.JobMatchDetailsDto jobMatchDto = AtsIntelligenceDto.JobMatchDetailsDto.builder()
+                .requiredSkillsScore(jobMatch.requiredSkillsScore())
+                .preferredSkillsScore(jobMatch.preferredSkillsScore())
+                .experienceScore(jobMatch.experienceScore())
+                .educationScore(jobMatch.educationScore())
+                .semanticScore(jobMatch.semanticScore())
+                .matchedRequiredSkills(jobMatch.matchedRequiredSkills())
+                .missingRequiredSkills(jobMatch.missingRequiredSkills())
+                .matchedPreferredSkills(jobMatch.matchedPreferredSkills())
+                .missingPreferredSkills(jobMatch.missingPreferredSkills())
+                .build();
+
+        return AtsIntelligenceDto.builder()
+                .analysisId(String.valueOf(saved.getId()))
+                .resumeId(resumeId)
+                .mode("JOB_MATCH")
+                .targetRole(request.getJobTitle())
+                .analysisStatus("ANALYSIS_COMPLETE")
+                .overallScore(universal.overallScore())
+                .scoreLabel(universal.scoreLabel())
+                .confidence(universal.confidence())
+                .confidenceMessage(universal.confidenceMessage())
+                .jobMatchScore(jobMatch.jobMatchScore())
+                .matchLevel(jobMatch.matchLevel())
+                .jobTitle(request.getJobTitle())
+                .companyName(request.getCompanyName())
+                .extraction(AtsIntelligenceDto.ExtractionTelemetryDto.builder()
+                        .status(quality.status().name())
+                        .method(extractionMethod)
+                        .confidence(quality.confidence())
+                        .characterCount(telemetry.getCharacterCount())
+                        .wordCount(quality.wordCount())
+                        .alphaRatio(quality.alphaRatio())
+                        .build())
+                .summary(jobMatch.summary())
+                .scoreBreakdown(jobMatch.categories())
+                .strengths(jobMatch.strengths())
+                .criticalIssues(jobMatch.criticalIssues())
+                .quickWins(universal.quickWins())
+                .detailedRecommendations(universal.detailedRecommendations())
+                .keywordAnalysis(AtsIntelligenceDto.KeywordIntelligenceDto.builder()
+                        .matched(jobMatch.matchedRequiredSkills())
+                        .missing(jobMatch.missingRequiredSkills())
+                        .suggested(Collections.emptyList())
+                        .keywordCoverage(jobMatch.matchedRequiredSkills().isEmpty() ? 0 :
+                                ((double) jobMatch.matchedRequiredSkills().size() / (jobMatch.matchedRequiredSkills().size() + jobMatch.missingRequiredSkills().size())) * 100.0)
+                        .build())
+                .jobMatch(jobMatchDto)
+                .analyzedAt(saved.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+                .build();
+    }
+
+    @Override
+    public BulletImprovementResponseDto improveBullet(BulletImprovementRequestDto request) {
+        return bulletImprovementEngine.improveBullet(request);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AtsIntelligenceDto> getResumeAnalysisHistory(Long resumeId, Long userId) {
+        ResumeEntity resume = fetchAndValidateResume(resumeId, userId);
+        List<AtsAnalysisEntity> entities = atsAnalysisRepository.findByResumeIdOrderByCreatedAtDesc(resumeId);
+
+        return entities.stream().map(e -> AtsIntelligenceDto.builder()
+                .analysisId(String.valueOf(e.getId()))
+                .resumeId(e.getResumeId())
+                .mode(e.getAnalysisMode())
+                .targetRole(e.getTargetRole())
+                .overallScore(e.getOverallScore() != null ? e.getOverallScore() : 0)
+                .scoreLabel(e.getScoreLabel() != null ? e.getScoreLabel() : "Standard")
+                .confidence(e.getConfidenceScore() != null ? e.getConfidenceScore() : 90)
+                .jobMatchScore(e.getJobMatchScore())
+                .summary(AtsIntelligenceDto.SummaryHeadlineDto.builder().description(e.getSummary()).build())
+                .analyzedAt(e.getCreatedAt() != null ? e.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : "")
+                .build()).toList();
+    }
+
+    @Override
+    @Transactional
+    public AtsDetailedResponseDto getOverallAnalysis(Long resumeId, Long userId) {
+        AtsIntelligenceDto intel = getUniversalIntelligence(resumeId, userId, "Software Engineer");
+        return mapIntelToDetailedDto(intel);
+    }
+
+    @Override
+    @Transactional
+    public AtsDetailedResponseDto analyzeJobMatch(Long resumeId, Long userId, AtsJobAnalysisRequestDto request) {
+        AtsIntelligenceDto intel = analyzeJobMatchIntelligence(resumeId, userId, request);
+        return mapIntelToDetailedDto(intel);
     }
 
     @Override
     @Transactional
     public ATSAnalysisResponse analyze(Long resumeId, String jobDescription) {
-        log.info("[ATS] Legacy analyze called for resumeId={}", resumeId);
         Long userId = 1L;
         Optional<ResumeEntity> rOpt = resumeRepository.findById(resumeId);
-        if (rOpt.isPresent()) {
-            userId = rOpt.get().getUserId();
-        }
+        if (rOpt.isPresent()) userId = rOpt.get().getUserId();
 
         AtsJobAnalysisRequestDto req = AtsJobAnalysisRequestDto.builder()
                 .jobDescription(jobDescription)
                 .build();
 
-        AtsDetailedResponseDto detailed = analyzeJobMatch(resumeId, userId, req);
+        AtsIntelligenceDto intel = analyzeJobMatchIntelligence(resumeId, userId, req);
 
         return new ATSAnalysisResponse(
-                detailed.getJobMatchScore() != null ? detailed.getJobMatchScore() : detailed.getOverallScore(),
-                detailed.getMatchedSkills() != null && !detailed.getMatchedSkills().isEmpty() ? detailed.getMatchedSkills() : detailed.getMatchedKeywords(),
-                detailed.getMissingSkills() != null && !detailed.getMissingSkills().isEmpty() ? detailed.getMissingSkills() : detailed.getMissingKeywords(),
-                detailed.getImprovements()
+                intel.getJobMatchScore() != null ? intel.getJobMatchScore() : intel.getOverallScore(),
+                intel.getKeywordAnalysis() != null ? intel.getKeywordAnalysis().getMatched() : List.of(),
+                intel.getKeywordAnalysis() != null ? intel.getKeywordAnalysis().getMissing() : List.of(),
+                intel.getQuickWins()
         );
     }
 
@@ -276,70 +363,44 @@ public class ATSServiceImpl implements AtsAnalysisService {
         return resume;
     }
 
-    private AtsDetailedResponseDto mapEntityToDto(AtsAnalysisEntity entity) {
-        List<AtsDetailedResponseDto.CategoryBreakdownDto> breakdown = fromJson(
-                entity.getBreakdownJson(), new TypeReference<List<AtsDetailedResponseDto.CategoryBreakdownDto>>() {});
-        List<String> matchedSkills = fromJson(entity.getMatchedSkillsJson(), new TypeReference<List<String>>() {});
-        List<String> missingSkills = fromJson(entity.getMissingSkillsJson(), new TypeReference<List<String>>() {});
-        List<String> additionalSkills = fromJson(entity.getAdditionalSkillsJson(), new TypeReference<List<String>>() {});
-        List<String> matchedKeywords = fromJson(entity.getMatchedKeywordsJson(), new TypeReference<List<String>>() {});
-        List<String> missingKeywords = fromJson(entity.getMissingKeywordsJson(), new TypeReference<List<String>>() {});
-        List<String> strengths = fromJson(entity.getStrengthsJson(), new TypeReference<List<String>>() {});
-        List<String> improvements = fromJson(entity.getImprovementsJson(), new TypeReference<List<String>>() {});
-        List<String> warnings = fromJson(entity.getWarningsJson(), new TypeReference<List<String>>() {});
+    private int getCatScore(List<AtsIntelligenceDto.CategoryDetailDto> list, String categoryName) {
+        return list.stream().filter(c -> c.getCategory().equalsIgnoreCase(categoryName)).mapToInt(AtsIntelligenceDto.CategoryDetailDto::getScore).findFirst().orElse(0);
+    }
 
-        String readinessLevel = "Strong ATS readiness";
-        if (entity.getOverallScore() != null) {
-            int score = entity.getOverallScore();
-            if (score >= 85) readinessLevel = "Excellent ATS readiness";
-            else if (score >= 75) readinessLevel = "Strong ATS readiness";
-            else if (score >= 60) readinessLevel = "Good foundation";
-            else if (score >= 40) readinessLevel = "Basic ATS readiness";
-            else readinessLevel = "Needs significant improvement";
-        }
-
-        String matchLevel = null;
-        if (entity.getJobMatchScore() != null) {
-            int jScore = entity.getJobMatchScore();
-            if (jScore >= 85) matchLevel = "Excellent Job Match";
-            else if (jScore >= 75) matchLevel = "Strong Job Match";
-            else if (jScore >= 60) matchLevel = "Good Job Match";
-            else if (jScore >= 40) matchLevel = "Basic Job Match";
-            else matchLevel = "Low Job Match";
-        }
-
-        double kwPercentage = 0.0;
-        int totalKw = (matchedKeywords != null ? matchedKeywords.size() : 0) + (missingKeywords != null ? missingKeywords.size() : 0);
-        if (totalKw > 0 && matchedKeywords != null) {
-            kwPercentage = Math.round(((double) matchedKeywords.size() / totalKw) * 100.0 * 10.0) / 10.0;
-        }
+    private AtsDetailedResponseDto mapIntelToDetailedDto(AtsIntelligenceDto intel) {
+        List<AtsDetailedResponseDto.CategoryBreakdownDto> breakdown = intel.getScoreBreakdown().stream().map(c ->
+                AtsDetailedResponseDto.CategoryBreakdownDto.builder()
+                        .category(c.getCategory())
+                        .score(c.getScore())
+                        .maxScore(c.getMaxScore())
+                        .percentage(Math.round(((double) c.getScore() / c.getMaxScore()) * 100.0))
+                        .feedback(c.getReason())
+                        .build()).toList();
 
         return AtsDetailedResponseDto.builder()
-                .analysisMode(entity.getAnalysisMode())
-                .resumeId(entity.getResumeId())
-                .jobTitle(entity.getJobTitle())
-                .companyName(entity.getCompanyName())
-                .extractionStatus(entity.getExtractionStatus())
-                .extractionMethod(entity.getExtractionMethod())
-                .extractionConfidence(entity.getExtractionConfidence())
-                .overallScore(entity.getOverallScore() != null ? entity.getOverallScore() : 0)
-                .readinessLevel(readinessLevel)
-                .jobMatchScore(entity.getJobMatchScore())
-                .matchLevel(matchLevel)
-                .summary(entity.getSummary())
-                .breakdown(breakdown != null ? breakdown : Collections.emptyList())
-                .matchedSkills(matchedSkills != null ? matchedSkills : Collections.emptyList())
-                .missingSkills(missingSkills != null ? missingSkills : Collections.emptyList())
-                .additionalResumeSkills(additionalSkills != null ? additionalSkills : Collections.emptyList())
-                .matchedKeywords(matchedKeywords != null ? matchedKeywords : Collections.emptyList())
-                .missingKeywords(missingKeywords != null ? missingKeywords : Collections.emptyList())
-                .keywordMatchPercentage(kwPercentage)
-                .strengths(strengths != null ? strengths : Collections.emptyList())
-                .improvements(improvements != null ? improvements : Collections.emptyList())
-                .warnings(warnings != null ? warnings : Collections.emptyList())
-                .analyzedAt(entity.getCreatedAt() != null
-                        ? entity.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                        : LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+                .analysisMode(intel.getMode())
+                .resumeId(intel.getResumeId())
+                .jobTitle(intel.getJobTitle())
+                .companyName(intel.getCompanyName())
+                .extractionStatus(intel.getExtraction() != null ? intel.getExtraction().getStatus() : "GOOD")
+                .extractionMethod(intel.getExtraction() != null ? intel.getExtraction().getMethod() : "PDFBOX_DIRECT")
+                .extractionConfidence(intel.getExtraction() != null ? intel.getExtraction().getConfidence() : 0.95)
+                .overallScore(intel.getOverallScore())
+                .readinessLevel(intel.getScoreLabel())
+                .jobMatchScore(intel.getJobMatchScore())
+                .matchLevel(intel.getMatchLevel())
+                .summary(intel.getSummary() != null ? intel.getSummary().getDescription() : "")
+                .breakdown(breakdown)
+                .matchedSkills(intel.getKeywordAnalysis() != null ? intel.getKeywordAnalysis().getMatched() : List.of())
+                .missingSkills(intel.getKeywordAnalysis() != null ? intel.getKeywordAnalysis().getMissing() : List.of())
+                .additionalResumeSkills(List.of())
+                .matchedKeywords(intel.getKeywordAnalysis() != null ? intel.getKeywordAnalysis().getMatched() : List.of())
+                .missingKeywords(intel.getKeywordAnalysis() != null ? intel.getKeywordAnalysis().getMissing() : List.of())
+                .keywordMatchPercentage(intel.getKeywordAnalysis() != null ? intel.getKeywordAnalysis().getKeywordCoverage() : 0.0)
+                .strengths(intel.getStrengths())
+                .improvements(intel.getQuickWins())
+                .warnings(List.of())
+                .analyzedAt(intel.getAnalyzedAt())
                 .build();
     }
 
@@ -363,18 +424,7 @@ public class ATSServiceImpl implements AtsAnalysisService {
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (Exception e) {
-            log.error("[ATS] Failed to serialize JSON: {}", e.getMessage());
             return "[]";
-        }
-    }
-
-    private <T> T fromJson(String json, TypeReference<T> typeRef) {
-        if (json == null || json.isBlank()) return null;
-        try {
-            return objectMapper.readValue(json, typeRef);
-        } catch (Exception e) {
-            log.debug("[ATS] Failed to deserialize JSON: {}", e.getMessage());
-            return null;
         }
     }
 }
