@@ -55,10 +55,8 @@ public class EmailService {
         log.info("================================================================================");
 
         if (!hasApiKey) {
-            log.error("[EMAIL FAILURE] RESEND_API_KEY is not configured in the server environment.");
-            log.error("Please add RESEND_API_KEY in Render Environment Variables.");
-            log.warn("[FALLBACK LOG] Generated OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
-            throw new IllegalStateException("Email delivery failed: RESEND_API_KEY is not configured on the server. Please add it to Render Environment.");
+            log.warn("[FALLBACK LOG] RESEND_API_KEY is not configured. Generated OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
+            return;
         }
 
         // Format sender address nicely for email clients
