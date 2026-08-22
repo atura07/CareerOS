@@ -22,7 +22,7 @@ import {
   ManageConnectionModal,
 } from '../components/leetcode'
 import { useLeetCode } from '../hooks/useLeetCode'
-import type { LeetCodeError } from '../types/leetcode'
+import type { LeetCodeError, Difficulty } from '../types/leetcode'
 
 /* ----------------------------- Loading skeletons ----------------------------- */
 
@@ -76,20 +76,16 @@ function ErrorState({ error, onRetry }: { error: LeetCodeError; onRetry: () => v
 }
 
 function formatLastSynced(timestamp?: string | null): string {
-  if (!timestamp) return 'Never'
+  if (!timestamp) return 'Never synced'
   try {
     const date = new Date(timestamp)
     const now = new Date()
-    const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000)
-    if (diffSec < 60) return 'Just now'
-    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`
-    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`
-    return date.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+    const diffSec = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000))
+    if (diffSec < 60) return 'Synced just now'
+    if (diffSec < 3600) return `Last synced ${Math.floor(diffSec / 60)}m ago`
+    if (diffSec < 86400) return `Last synced ${Math.floor(diffSec / 3600)}h ago`
+    const days = Math.floor(diffSec / 86400)
+    return `Last synced ${days}d ago`
   } catch {
     return 'Recently'
   }
@@ -122,6 +118,7 @@ export function LeetCodePage() {
 
   const [connectModalOpen, setConnectModalOpen] = useState(false)
   const [manageModalOpen, setManageModalOpen] = useState(false)
+  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | null>(null)
 
   const handleOpenConnect = () => {
     clearPreview()
@@ -199,7 +196,7 @@ export function LeetCodePage() {
           {connected ? (
             <>
               <div className="hidden text-right text-xs text-white/40 sm:block">
-                <p>Last synced: <span className="text-white/70 font-medium">{formatLastSynced(lastSyncedAt)}</span></p>
+                <p className="text-white/70 font-medium">{formatLastSynced(lastSyncedAt)}</p>
               </div>
 
               <button
@@ -242,7 +239,7 @@ export function LeetCodePage() {
           <div className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
             <span>
-              LeetCode API temporarily unreachable ({lastErrorMessage || 'timeout'}). Displaying last synced data from {formatLastSynced(lastSyncedAt)}.
+              LeetCode API temporarily unreachable ({lastErrorMessage || 'timeout'}). Displaying last synced data ({formatLastSynced(lastSyncedAt)}).
             </span>
           </div>
           <button
@@ -270,7 +267,11 @@ export function LeetCodePage() {
               <ProfileCard profile={data.profile} />
             </div>
             <div className="lg:col-span-3">
-              <StatsCards stats={data.stats} />
+              <StatsCards
+                stats={data.stats}
+                selectedDifficulty={selectedDifficulty}
+                onSelectDifficulty={setSelectedDifficulty}
+              />
             </div>
           </div>
 
@@ -283,7 +284,10 @@ export function LeetCodePage() {
 
           {/* Recent Accepted Problems */}
           <div className="mb-6">
-            <RecentProblems problems={data.recentProblems} />
+            <RecentProblems
+              problems={data.recentProblems}
+              selectedDifficulty={selectedDifficulty}
+            />
           </div>
 
           {/* Contribution Heatmap */}

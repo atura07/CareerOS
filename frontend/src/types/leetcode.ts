@@ -33,6 +33,8 @@ export interface DailyChallenge {
 export interface RecentProblem {
   id: number
   title: string
+  titleSlug?: string
+  url?: string
   difficulty: Difficulty
   status: ProblemStatus
   date: string

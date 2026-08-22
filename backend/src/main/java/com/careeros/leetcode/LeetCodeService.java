@@ -516,10 +516,18 @@ public class LeetCodeService {
                 String dateStr = ts > 0
                         ? LocalDate.ofInstant(Instant.ofEpochSecond(ts), ZoneId.of("UTC")).format(DateTimeFormatter.ISO_LOCAL_DATE)
                         : LocalDate.now(ZoneId.of("UTC")).format(DateTimeFormatter.ISO_LOCAL_DATE);
+                String problemTitle = sub.path("title").asText("Untitled Problem");
+                String titleSlug = sub.path("titleSlug").asText("");
+                if (titleSlug.isBlank()) {
+                    titleSlug = problemTitle.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
+                }
+                String problemUrl = "https://leetcode.com/problems/" + titleSlug + "/";
 
                 recentProblems.add(LeetCodeDataDto.RecentProblem.builder()
                         .id(sub.path("id").asLong(idx++))
-                        .title(sub.path("title").asText("Untitled Problem"))
+                        .title(problemTitle)
+                        .titleSlug(titleSlug)
+                        .url(problemUrl)
                         .difficulty("Medium")
                         .status("Solved")
                         .date(dateStr)

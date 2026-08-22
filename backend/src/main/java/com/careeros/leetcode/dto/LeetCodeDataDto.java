@@ -66,6 +66,8 @@ public class LeetCodeDataDto {
     public static class RecentProblem {
         private long id;
         private String title;
+        private String titleSlug;
+        private String url;
         private String difficulty;
         private String status;
         private String date;

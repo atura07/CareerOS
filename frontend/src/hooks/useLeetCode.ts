@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   LeetCodeData,
   LeetCodeError,
@@ -35,6 +35,9 @@ interface UseLeetCodeResult {
   retry: () => void
 }
 
+/** Stale interval before triggering background sync (15 minutes). */
+const STALE_SYNC_INTERVAL_MS = 15 * 60 * 1000
+
 /**
  * Hook for managing the authenticated user's LeetCode connection, preview, sync, and dashboard data.
  */
@@ -44,6 +47,9 @@ export function useLeetCode(): UseLeetCodeResult {
   const [syncing, setSyncing] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<LeetCodeError | null>(null)
+
+  // Track if background stale sync has been triggered for this session
+  const autoSyncedRef = useRef(false)
 
   // Preview state for the modal
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -56,6 +62,26 @@ export function useLeetCode(): UseLeetCodeResult {
     try {
       const res = await getLeetCodeStatus()
       setStatus(res)
+
+      // Automatic background sync if connected data is stale
+      if (res.connected && !autoSyncedRef.current) {
+        const lastSyncTime = res.lastSyncedAt ? new Date(res.lastSyncedAt).getTime() : 0
+        const isStale = !lastSyncTime || Date.now() - lastSyncTime > STALE_SYNC_INTERVAL_MS
+        if (isStale) {
+          autoSyncedRef.current = true
+          void (async () => {
+            setSyncing(true)
+            try {
+              const freshRes = await syncLeetCodeAccount()
+              setStatus(freshRes)
+            } catch (syncErr) {
+              console.debug('Background stale sync skipped:', syncErr)
+            } finally {
+              setSyncing(false)
+            }
+          })()
+        }
+      }
     } catch (err) {
       setError(err as LeetCodeError)
     } finally {
@@ -97,6 +123,7 @@ export function useLeetCode(): UseLeetCodeResult {
       setStatus(res)
       setPreviewData(null)
       setPreviewError(null)
+      autoSyncedRef.current = true
       return true
     } catch (err) {
       setError(err as LeetCodeError)
@@ -118,6 +145,7 @@ export function useLeetCode(): UseLeetCodeResult {
         lastSyncedAt: null,
         lastSyncStatus: null,
       })
+      autoSyncedRef.current = false
       return true
     } catch (err) {
       setError(err as LeetCodeError)
