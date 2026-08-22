@@ -12,6 +12,9 @@ import java.sql.Statement;
 /**
  * Runs idempotent database migrations directly on the DataSource before Hibernate's
  * EntityManagerFactory or any JPA repositories are initialized.
+ *
+ * Consolidated into fast, single-batch DDL executions to minimize network roundtrips
+ * and prevent deployment startup timeouts on serverless PostgreSQL / Render.
  */
 @Slf4j
 @Component
@@ -29,265 +32,292 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
     }
 
     private void runMigration(DataSource dataSource) {
-        log.info("Executing pre-JPA database migrations on DataSource...");
+        long startTime = System.currentTimeMillis();
+        log.info("[STARTUP-PHASE] [MIGRATION] Executing pre-JPA database migrations on DataSource...");
+
+        String consolidatedMigrationSql = """
+            -- 1. Users table adjustments
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+            ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
+
+            -- 2. Email verification OTPs
+            CREATE TABLE IF NOT EXISTS email_verification_otps (
+                id BIGSERIAL PRIMARY KEY,
+                email VARCHAR(255) NOT NULL,
+                otp_hash VARCHAR(255) NOT NULL,
+                expiry_time TIMESTAMP NOT NULL,
+                attempt_count INT NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                resend_cooldown_until TIMESTAMP,
+                purpose VARCHAR(50) NOT NULL DEFAULT 'LOGIN'
+            );
+            CREATE INDEX IF NOT EXISTS idx_email_verification_otps_email ON email_verification_otps(email);
+            CREATE INDEX IF NOT EXISTS idx_email_verification_otps_expiry ON email_verification_otps(expiry_time);
+
+            -- 3. Resumes table
+            CREATE TABLE IF NOT EXISTS resumes (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                original_file_name VARCHAR(255) NOT NULL,
+                stored_file_name VARCHAR(255) NOT NULL,
+                file_size BIGINT NOT NULL,
+                file_type VARCHAR(50) NOT NULL,
+                extracted_text TEXT,
+                upload_date TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id);
+
+            -- 4. Applications table
+            CREATE TABLE IF NOT EXISTS applications (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                company_name VARCHAR(255) NOT NULL,
+                company_logo VARCHAR(255),
+                role VARCHAR(255) NOT NULL,
+                package_value VARCHAR(100),
+                location VARCHAR(255),
+                applied_date VARCHAR(100),
+                last_updated VARCHAR(100),
+                status VARCHAR(50) NOT NULL DEFAULT 'Applied',
+                next_round VARCHAR(100),
+                notes TEXT,
+                recruiter VARCHAR(255),
+                recruiter_email VARCHAR(255),
+                application_link VARCHAR(500),
+                deadline VARCHAR(100),
+                priority VARCHAR(50) NOT NULL DEFAULT 'Medium',
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_applications_user_id ON applications(user_id);
+
+            -- 5. Roadmaps table
+            CREATE TABLE IF NOT EXISTS roadmaps (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                company VARCHAR(255) NOT NULL,
+                role VARCHAR(255) NOT NULL,
+                duration VARCHAR(100) NOT NULL,
+                total_weeks INT NOT NULL DEFAULT 8,
+                focus_areas TEXT,
+                current_skills TEXT,
+                weekly_plans TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_roadmaps_user_id ON roadmaps(user_id);
+
+            -- 6. Companies module tables
+            CREATE TABLE IF NOT EXISTS companies (
+                id BIGSERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                slug VARCHAR(255) NOT NULL UNIQUE,
+                logo_url VARCHAR(500),
+                website VARCHAR(500),
+                description TEXT,
+                industry VARCHAR(100),
+                package_info VARCHAR(100),
+                location VARCHAR(255),
+                difficulty VARCHAR(50) DEFAULT 'Medium',
+                active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS company_roles (
+                id BIGSERIAL PRIMARY KEY,
+                company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                title VARCHAR(255) NOT NULL,
+                location VARCHAR(255),
+                experience_level VARCHAR(100),
+                eligibility_info TEXT,
+                required_skills TEXT,
+                active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS company_interview_processes (
+                id BIGSERIAL PRIMARY KEY,
+                company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                role_id BIGINT REFERENCES company_roles(id) ON DELETE SET NULL,
+                round_number INT NOT NULL,
+                round_name VARCHAR(255) NOT NULL,
+                round_type VARCHAR(50) NOT NULL,
+                description TEXT,
+                preparation_requirements TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS company_prep_topics (
+                id BIGSERIAL PRIMARY KEY,
+                company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                role_id BIGINT REFERENCES company_roles(id) ON DELETE SET NULL,
+                subject VARCHAR(100) NOT NULL,
+                topic VARCHAR(255) NOT NULL,
+                priority VARCHAR(50) DEFAULT 'Medium',
+                estimated_effort VARCHAR(100),
+                resources_json TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS user_company_preparations (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                role_id BIGINT REFERENCES company_roles(id) ON DELETE SET NULL,
+                status VARCHAR(50) NOT NULL DEFAULT 'NOT_STARTED',
+                started_date TIMESTAMP,
+                target_date DATE,
+                progress_percentage INT DEFAULT 0,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                CONSTRAINT uq_user_company_prep UNIQUE(user_id, company_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS user_prep_tasks (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                preparation_id BIGINT NOT NULL REFERENCES user_company_preparations(id) ON DELETE CASCADE,
+                topic_id BIGINT NOT NULL REFERENCES company_prep_topics(id) ON DELETE CASCADE,
+                status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+                completed_date TIMESTAMP,
+                notes TEXT,
+                CONSTRAINT uq_user_prep_task UNIQUE(preparation_id, topic_id)
+            );
+
+            -- 7. AI Mock Interview tables
+            CREATE TABLE IF NOT EXISTS interview_sessions (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                company_id BIGINT REFERENCES companies(id) ON DELETE SET NULL,
+                company_name VARCHAR(255),
+                role_title VARCHAR(255),
+                interview_type VARCHAR(50) NOT NULL,
+                difficulty VARCHAR(50) NOT NULL,
+                status VARCHAR(50) NOT NULL DEFAULT 'IN_PROGRESS',
+                started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                ended_at TIMESTAMP,
+                duration_minutes INT DEFAULT 30,
+                overall_score INT,
+                technical_score INT,
+                communication_score INT,
+                answer_quality_score INT,
+                feedback_summary TEXT,
+                problem_solving_score INT,
+                project_score INT,
+                current_stage VARCHAR(50) DEFAULT 'INTRODUCTION'
+            );
+
+            CREATE TABLE IF NOT EXISTS interview_questions (
+                id BIGSERIAL PRIMARY KEY,
+                session_id BIGINT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE,
+                question_order INT NOT NULL,
+                question_text TEXT NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                expected_criteria TEXT,
+                is_adaptive_follow_up BOOLEAN DEFAULT FALSE
+            );
+
+            CREATE TABLE IF NOT EXISTS interview_answers (
+                id BIGSERIAL PRIMARY KEY,
+                session_id BIGINT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE,
+                question_id BIGINT NOT NULL REFERENCES interview_questions(id) ON DELETE CASCADE,
+                transcript TEXT NOT NULL,
+                answer_duration_seconds INT,
+                timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+                ai_evaluation TEXT,
+                score INT,
+                strengths TEXT,
+                improvement_areas TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS interview_reports (
+                id BIGSERIAL PRIMARY KEY,
+                session_id BIGINT NOT NULL UNIQUE REFERENCES interview_sessions(id) ON DELETE CASCADE,
+                overall_strengths TEXT,
+                overall_weaknesses TEXT,
+                recommendations TEXT,
+                next_preparation_actions TEXT,
+                questions_answered_well TEXT,
+                questions_needing_improvement TEXT,
+                detailed_feedback TEXT,
+                recommended_dsa_topics TEXT,
+                interview_readiness VARCHAR(50),
+                personalized_message TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+
+            -- 8. Ensure additive columns on pre-existing interview tables
+            ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS problem_solving_score INT;
+            ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS project_score INT;
+            ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS current_stage VARCHAR(50) DEFAULT 'INTRODUCTION';
+
+            ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS questions_answered_well TEXT;
+            ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS questions_needing_improvement TEXT;
+            ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS detailed_feedback TEXT;
+            ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS recommended_dsa_topics TEXT;
+            ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS interview_readiness VARCHAR(50);
+            ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS personalized_message TEXT;
+        """;
+
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
 
-            // 1. Add email_verified to users table if missing
-            executeMigration(stmt, "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;", "users.email_verified column");
-
-            // 2. Allow nullable password for Google OAuth users
-            executeMigration(stmt, "ALTER TABLE users ALTER COLUMN password DROP NOT NULL;", "users.password nullable");
-
-            // 3. Create email_verification_otps table
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS email_verification_otps (
-                    id BIGSERIAL PRIMARY KEY,
-                    email VARCHAR(255) NOT NULL,
-                    otp_hash VARCHAR(255) NOT NULL,
-                    expiry_time TIMESTAMP NOT NULL,
-                    attempt_count INT NOT NULL DEFAULT 0,
-                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    resend_cooldown_until TIMESTAMP,
-                    purpose VARCHAR(50) NOT NULL DEFAULT 'LOGIN'
-                );
-            """, "email_verification_otps table");
-
-            // 4. Create performance indexes
-            executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_email_verification_otps_email ON email_verification_otps(email);", "email_verification_otps.email index");
-            executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_email_verification_otps_expiry ON email_verification_otps(expiry_time);", "email_verification_otps.expiry index");
-
-            // 4b. Core CareerOS Tables
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS resumes (
-                    id BIGSERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    original_file_name VARCHAR(255) NOT NULL,
-                    stored_file_name VARCHAR(255) NOT NULL,
-                    file_size BIGINT NOT NULL,
-                    file_type VARCHAR(50) NOT NULL,
-                    extracted_text TEXT,
-                    upload_date TIMESTAMP NOT NULL DEFAULT NOW()
-                );
-            """, "resumes table");
-            executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id);", "resumes.user_id index");
-
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS applications (
-                    id BIGSERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    company_name VARCHAR(255) NOT NULL,
-                    company_logo VARCHAR(255),
-                    role VARCHAR(255) NOT NULL,
-                    package_value VARCHAR(100),
-                    location VARCHAR(255),
-                    applied_date VARCHAR(100),
-                    last_updated VARCHAR(100),
-                    status VARCHAR(50) NOT NULL DEFAULT 'Applied',
-                    next_round VARCHAR(100),
-                    notes TEXT,
-                    recruiter VARCHAR(255),
-                    recruiter_email VARCHAR(255),
-                    application_link VARCHAR(500),
-                    deadline VARCHAR(100),
-                    priority VARCHAR(50) NOT NULL DEFAULT 'Medium',
-                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-                );
-            """, "applications table");
-            executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_applications_user_id ON applications(user_id);", "applications.user_id index");
-
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS roadmaps (
-                    id BIGSERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    company VARCHAR(255) NOT NULL,
-                    role VARCHAR(255) NOT NULL,
-                    duration VARCHAR(100) NOT NULL,
-                    total_weeks INT NOT NULL DEFAULT 8,
-                    focus_areas TEXT,
-                    current_skills TEXT,
-                    weekly_plans TEXT,
-                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-                );
-            """, "roadmaps table");
-            executeMigration(stmt, "CREATE INDEX IF NOT EXISTS idx_roadmaps_user_id ON roadmaps(user_id);", "roadmaps.user_id index");
-
-            // 5. Companies Module Tables
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS companies (
-                    id BIGSERIAL PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    slug VARCHAR(255) NOT NULL UNIQUE,
-                    logo_url VARCHAR(500),
-                    website VARCHAR(500),
-                    description TEXT,
-                    industry VARCHAR(100),
-                    package_info VARCHAR(100),
-                    location VARCHAR(255),
-                    difficulty VARCHAR(50) DEFAULT 'Medium',
-                    active BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-                );
-            """, "companies table");
-
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS company_roles (
-                    id BIGSERIAL PRIMARY KEY,
-                    company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-                    title VARCHAR(255) NOT NULL,
-                    location VARCHAR(255),
-                    experience_level VARCHAR(100),
-                    eligibility_info TEXT,
-                    required_skills TEXT,
-                    active BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-                );
-            """, "company_roles table");
-
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS company_interview_processes (
-                    id BIGSERIAL PRIMARY KEY,
-                    company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-                    role_id BIGINT REFERENCES company_roles(id) ON DELETE SET NULL,
-                    round_number INT NOT NULL,
-                    round_name VARCHAR(255) NOT NULL,
-                    round_type VARCHAR(50) NOT NULL,
-                    description TEXT,
-                    preparation_requirements TEXT
-                );
-            """, "company_interview_processes table");
-
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS company_prep_topics (
-                    id BIGSERIAL PRIMARY KEY,
-                    company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-                    role_id BIGINT REFERENCES company_roles(id) ON DELETE SET NULL,
-                    subject VARCHAR(100) NOT NULL,
-                    topic VARCHAR(255) NOT NULL,
-                    priority VARCHAR(50) DEFAULT 'Medium',
-                    estimated_effort VARCHAR(100),
-                    resources_json TEXT
-                );
-            """, "company_prep_topics table");
-
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS user_company_preparations (
-                    id BIGSERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-                    role_id BIGINT REFERENCES company_roles(id) ON DELETE SET NULL,
-                    status VARCHAR(50) NOT NULL DEFAULT 'NOT_STARTED',
-                    started_date TIMESTAMP,
-                    target_date DATE,
-                    progress_percentage INT DEFAULT 0,
-                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    CONSTRAINT uq_user_company_prep UNIQUE(user_id, company_id)
-                );
-            """, "user_company_preparations table");
-
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS user_prep_tasks (
-                    id BIGSERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    preparation_id BIGINT NOT NULL REFERENCES user_company_preparations(id) ON DELETE CASCADE,
-                    topic_id BIGINT NOT NULL REFERENCES company_prep_topics(id) ON DELETE CASCADE,
-                    status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-                    completed_date TIMESTAMP,
-                    notes TEXT,
-                    CONSTRAINT uq_user_prep_task UNIQUE(preparation_id, topic_id)
-                );
-            """, "user_prep_tasks table");
-
-            // 6. AI Mock Interview Tables
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS interview_sessions (
-                    id BIGSERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    company_id BIGINT REFERENCES companies(id) ON DELETE SET NULL,
-                    company_name VARCHAR(255),
-                    role_title VARCHAR(255),
-                    interview_type VARCHAR(50) NOT NULL,
-                    difficulty VARCHAR(50) NOT NULL,
-                    status VARCHAR(50) NOT NULL DEFAULT 'IN_PROGRESS',
-                    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    ended_at TIMESTAMP,
-                    duration_minutes INT DEFAULT 30,
-                    overall_score INT,
-                    technical_score INT,
-                    communication_score INT,
-                    answer_quality_score INT,
-                    feedback_summary TEXT
-                );
-            """, "interview_sessions table");
-
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS interview_questions (
-                    id BIGSERIAL PRIMARY KEY,
-                    session_id BIGINT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE,
-                    question_order INT NOT NULL,
-                    question_text TEXT NOT NULL,
-                    category VARCHAR(50) NOT NULL,
-                    expected_criteria TEXT,
-                    is_adaptive_follow_up BOOLEAN DEFAULT FALSE
-                );
-            """, "interview_questions table");
-
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS interview_answers (
-                    id BIGSERIAL PRIMARY KEY,
-                    session_id BIGINT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE,
-                    question_id BIGINT NOT NULL REFERENCES interview_questions(id) ON DELETE CASCADE,
-                    transcript TEXT NOT NULL,
-                    answer_duration_seconds INT,
-                    timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
-                    ai_evaluation TEXT,
-                    score INT,
-                    strengths TEXT,
-                    improvement_areas TEXT
-                );
-            """, "interview_answers table");
-
-            executeMigration(stmt, """
-                CREATE TABLE IF NOT EXISTS interview_reports (
-                    id BIGSERIAL PRIMARY KEY,
-                    session_id BIGINT NOT NULL UNIQUE REFERENCES interview_sessions(id) ON DELETE CASCADE,
-                    overall_strengths TEXT,
-                    overall_weaknesses TEXT,
-                    recommendations TEXT,
-                    next_preparation_actions TEXT,
-                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-                );
-            """, "interview_reports table");
-
-            // 7. Ensure new conversational columns
-            executeMigration(stmt, "ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS problem_solving_score INT;", "interview_sessions.problem_solving_score");
-            executeMigration(stmt, "ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS project_score INT;", "interview_sessions.project_score");
-            executeMigration(stmt, "ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS current_stage VARCHAR(50) DEFAULT 'INTRODUCTION';", "interview_sessions.current_stage");
-
-            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS questions_answered_well TEXT;", "interview_reports.questions_answered_well");
-            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS questions_needing_improvement TEXT;", "interview_reports.questions_needing_improvement");
-            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS detailed_feedback TEXT;", "interview_reports.detailed_feedback");
-            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS recommended_dsa_topics TEXT;", "interview_reports.recommended_dsa_topics");
-            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS interview_readiness VARCHAR(50);", "interview_reports.interview_readiness");
-            executeMigration(stmt, "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS personalized_message TEXT;", "interview_reports.personalized_message");
-
-            log.info("Pre-JPA Migration: All CareerOS Phase 2 tables verified successfully.");
+            stmt.execute(consolidatedMigrationSql);
+            long elapsed = System.currentTimeMillis() - startTime;
+            log.info("[STARTUP-PHASE] [MIGRATION] Pre-JPA database migration completed successfully in {} ms.", elapsed);
 
         } catch (Exception e) {
-            log.error("Pre-JPA Database Migration Connection Exception: {}", e.getMessage(), e);
+            log.warn("[STARTUP-PHASE] [MIGRATION] Batch migration notice: {}. Attempting statement-by-statement execution fallback...", e.getMessage());
+            executeIndividualFallback(dataSource);
         }
     }
 
-    private void executeMigration(Statement stmt, String sql, String description) {
-        try {
-            stmt.execute(sql);
-            log.info("Migration successful: {}", description);
+    private void executeIndividualFallback(DataSource dataSource) {
+        String[] fallbackStatements = new String[] {
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE users ALTER COLUMN password DROP NOT NULL",
+            "CREATE TABLE IF NOT EXISTS email_verification_otps (id BIGSERIAL PRIMARY KEY, email VARCHAR(255) NOT NULL, otp_hash VARCHAR(255) NOT NULL, expiry_time TIMESTAMP NOT NULL, attempt_count INT NOT NULL DEFAULT 0, created_at TIMESTAMP NOT NULL DEFAULT NOW(), resend_cooldown_until TIMESTAMP, purpose VARCHAR(50) NOT NULL DEFAULT 'LOGIN')",
+            "CREATE INDEX IF NOT EXISTS idx_email_verification_otps_email ON email_verification_otps(email)",
+            "CREATE INDEX IF NOT EXISTS idx_email_verification_otps_expiry ON email_verification_otps(expiry_time)",
+            "CREATE TABLE IF NOT EXISTS resumes (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, original_file_name VARCHAR(255) NOT NULL, stored_file_name VARCHAR(255) NOT NULL, file_size BIGINT NOT NULL, file_type VARCHAR(50) NOT NULL, extracted_text TEXT, upload_date TIMESTAMP NOT NULL DEFAULT NOW())",
+            "CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id)",
+            "CREATE TABLE IF NOT EXISTS applications (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, company_name VARCHAR(255) NOT NULL, company_logo VARCHAR(255), role VARCHAR(255) NOT NULL, package_value VARCHAR(100), location VARCHAR(255), applied_date VARCHAR(100), last_updated VARCHAR(100), status VARCHAR(50) NOT NULL DEFAULT 'Applied', next_round VARCHAR(100), notes TEXT, recruiter VARCHAR(255), recruiter_email VARCHAR(255), application_link VARCHAR(500), deadline VARCHAR(100), priority VARCHAR(50) NOT NULL DEFAULT 'Medium', created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP NOT NULL DEFAULT NOW())",
+            "CREATE INDEX IF NOT EXISTS idx_applications_user_id ON applications(user_id)",
+            "CREATE TABLE IF NOT EXISTS roadmaps (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, company VARCHAR(255) NOT NULL, role VARCHAR(255) NOT NULL, duration VARCHAR(100) NOT NULL, total_weeks INT NOT NULL DEFAULT 8, focus_areas TEXT, current_skills TEXT, weekly_plans TEXT, created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP NOT NULL DEFAULT NOW())",
+            "CREATE INDEX IF NOT EXISTS idx_roadmaps_user_id ON roadmaps(user_id)",
+            "CREATE TABLE IF NOT EXISTS companies (id BIGSERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, slug VARCHAR(255) NOT NULL UNIQUE, logo_url VARCHAR(500), website VARCHAR(500), description TEXT, industry VARCHAR(100), package_info VARCHAR(100), location VARCHAR(255), difficulty VARCHAR(50) DEFAULT 'Medium', active BOOLEAN DEFAULT TRUE, created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP NOT NULL DEFAULT NOW())",
+            "CREATE TABLE IF NOT EXISTS company_roles (id BIGSERIAL PRIMARY KEY, company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE, title VARCHAR(255) NOT NULL, location VARCHAR(255), experience_level VARCHAR(100), eligibility_info TEXT, required_skills TEXT, active BOOLEAN DEFAULT TRUE, created_at TIMESTAMP NOT NULL DEFAULT NOW())",
+            "CREATE TABLE IF NOT EXISTS company_interview_processes (id BIGSERIAL PRIMARY KEY, company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE, role_id BIGINT REFERENCES company_roles(id) ON DELETE SET NULL, round_number INT NOT NULL, round_name VARCHAR(255) NOT NULL, round_type VARCHAR(50) NOT NULL, description TEXT, preparation_requirements TEXT)",
+            "CREATE TABLE IF NOT EXISTS company_prep_topics (id BIGSERIAL PRIMARY KEY, company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE, role_id BIGINT REFERENCES company_roles(id) ON DELETE SET NULL, subject VARCHAR(100) NOT NULL, topic VARCHAR(255) NOT NULL, priority VARCHAR(50) DEFAULT 'Medium', estimated_effort VARCHAR(100), resources_json TEXT)",
+            "CREATE TABLE IF NOT EXISTS user_company_preparations (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, company_id BIGINT NOT NULL REFERENCES companies(id) ON DELETE CASCADE, role_id BIGINT REFERENCES company_roles(id) ON DELETE SET NULL, status VARCHAR(50) NOT NULL DEFAULT 'NOT_STARTED', started_date TIMESTAMP, target_date DATE, progress_percentage INT DEFAULT 0, created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP NOT NULL DEFAULT NOW(), CONSTRAINT uq_user_company_prep UNIQUE(user_id, company_id))",
+            "CREATE TABLE IF NOT EXISTS user_prep_tasks (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, preparation_id BIGINT NOT NULL REFERENCES user_company_preparations(id) ON DELETE CASCADE, topic_id BIGINT NOT NULL REFERENCES company_prep_topics(id) ON DELETE CASCADE, status VARCHAR(50) NOT NULL DEFAULT 'PENDING', completed_date TIMESTAMP, notes TEXT, CONSTRAINT uq_user_prep_task UNIQUE(preparation_id, topic_id))",
+            "CREATE TABLE IF NOT EXISTS interview_sessions (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, company_id BIGINT REFERENCES companies(id) ON DELETE SET NULL, company_name VARCHAR(255), role_title VARCHAR(255), interview_type VARCHAR(50) NOT NULL, difficulty VARCHAR(50) NOT NULL, status VARCHAR(50) NOT NULL DEFAULT 'IN_PROGRESS', started_at TIMESTAMP NOT NULL DEFAULT NOW(), ended_at TIMESTAMP, duration_minutes INT DEFAULT 30, overall_score INT, technical_score INT, communication_score INT, answer_quality_score INT, feedback_summary TEXT)",
+            "CREATE TABLE IF NOT EXISTS interview_questions (id BIGSERIAL PRIMARY KEY, session_id BIGINT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE, question_order INT NOT NULL, question_text TEXT NOT NULL, category VARCHAR(50) NOT NULL, expected_criteria TEXT, is_adaptive_follow_up BOOLEAN DEFAULT FALSE)",
+            "CREATE TABLE IF NOT EXISTS interview_answers (id BIGSERIAL PRIMARY KEY, session_id BIGINT NOT NULL REFERENCES interview_sessions(id) ON DELETE CASCADE, question_id BIGINT NOT NULL REFERENCES interview_questions(id) ON DELETE CASCADE, transcript TEXT NOT NULL, answer_duration_seconds INT, timestamp TIMESTAMP NOT NULL DEFAULT NOW(), ai_evaluation TEXT, score INT, strengths TEXT, improvement_areas TEXT)",
+            "CREATE TABLE IF NOT EXISTS interview_reports (id BIGSERIAL PRIMARY KEY, session_id BIGINT NOT NULL UNIQUE REFERENCES interview_sessions(id) ON DELETE CASCADE, overall_strengths TEXT, overall_weaknesses TEXT, recommendations TEXT, next_preparation_actions TEXT, created_at TIMESTAMP NOT NULL DEFAULT NOW())",
+            "ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS problem_solving_score INT",
+            "ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS project_score INT",
+            "ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS current_stage VARCHAR(50) DEFAULT 'INTRODUCTION'",
+            "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS questions_answered_well TEXT",
+            "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS questions_needing_improvement TEXT",
+            "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS detailed_feedback TEXT",
+            "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS recommended_dsa_topics TEXT",
+            "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS interview_readiness VARCHAR(50)",
+            "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS personalized_message TEXT"
+        };
+
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+
+            for (String sql : fallbackStatements) {
+                try {
+                    stmt.execute(sql);
+                } catch (Exception e) {
+                    log.debug("[STARTUP-PHASE] [MIGRATION] Notice executing statement [{}]: {}", sql, e.getMessage());
+                }
+            }
+            log.info("[STARTUP-PHASE] [MIGRATION] Fallback migration execution completed.");
         } catch (Exception e) {
-            log.warn("Migration notice for [{}]: {}", description, e.getMessage());
+            log.error("[STARTUP-PHASE] [MIGRATION] Connection failure during fallback migration: {}", e.getMessage(), e);
         }
     }
 }

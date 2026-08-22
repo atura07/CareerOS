@@ -23,10 +23,13 @@ RUN useradd --system --home /app --shell /sbin/nologin appuser
 
 WORKDIR /app
 
+# Pre-create the uploads directory and copy the jar
+RUN mkdir -p /app/uploads
+
 # Copy only the built jar from the build stage (no Maven, no source).
 COPY --from=build /build/target/careeros-backend-0.0.1-SNAPSHOT.jar /app/careeros-backend.jar
 
-# Give the non-root user ownership of the application.
+# Give the non-root user ownership of the application and uploads.
 RUN chown -R appuser:appuser /app
 
 # Switch to the non-root user.
@@ -35,6 +38,5 @@ USER appuser
 # Port exposed by the Spring Boot app.
 EXPOSE 8080
 
-# Run the Spring Boot jar.
-ENTRYPOINT ["java", "-jar", "/app/careeros-backend.jar"]
-
+# Run the Spring Boot jar with container performance optimization and entropy flags
+ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "/app/careeros-backend.jar"]
