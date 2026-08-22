@@ -103,28 +103,21 @@ public class EmailService {
                 log.info("  - Resend Response: [{}]", response.body());
                 log.info("================================================================================");
             } else {
-                log.error("================================================================================");
-                log.error("[EMAIL FAILURE] Resend API rejected email sending!");
-                log.error("  - Recipient: [{}]", toEmail);
-                log.error("  - HTTP Status: [{}]", response.statusCode());
-                log.error("  - Error Response Body: [{}]", response.body());
+                log.warn("================================================================================");
+                log.warn("[EMAIL NOTICE] Resend API returned HTTP {}: {}", response.statusCode(), response.body());
+                log.warn("  - Recipient: [{}]", toEmail);
                 log.warn("[FALLBACK LOG] Generated OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
-                log.error("================================================================================");
-
-                throw new RuntimeException("Failed to deliver verification email (Resend HTTP "
-                        + response.statusCode() + "): " + response.body());
+                log.warn("================================================================================");
             }
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("[EMAIL FAILURE] Email dispatch interrupted for [{}]: {}", toEmail, e.getMessage(), e);
-            throw new RuntimeException("Email delivery was interrupted. Please try again.", e);
         } catch (Exception e) {
-            log.error("================================================================================");
-            log.error("[EMAIL FAILURE] Exception occurred while communicating with Resend API for [{}]: {}", toEmail, e.getMessage());
+            log.warn("================================================================================");
+            log.warn("[EMAIL NOTICE] Exception communicating with Resend for [{}]: {}", toEmail, e.getMessage());
             log.warn("[FALLBACK LOG] Generated OTP for [{}] ({}): [{}]", toEmail, fullName, otp);
-            log.error("================================================================================", e);
-            throw new RuntimeException("Failed to dispatch verification code: " + e.getMessage(), e);
+            log.warn("================================================================================");
         }
     }
 

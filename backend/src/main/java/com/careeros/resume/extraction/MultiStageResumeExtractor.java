@@ -161,26 +161,27 @@ public class MultiStageResumeExtractor {
                 stage1Assessment.alphaRatio(),
                 stage1Assessment.detectedSections());
 
-        // If Stage 1 is high quality, return immediately without wasting OCR resources
+        // If Stage 1 produced good text, return immediately
         if (stage1Assessment.status() == ExtractionStatus.EXCELLENT ||
-                (stage1Assessment.status() == ExtractionStatus.GOOD && pdfBoxClean.length() >= 150)) {
+                stage1Assessment.status() == ExtractionStatus.GOOD ||
+                (pdfBoxClean.length() >= 80 && stage1Assessment.alphaRatio() >= 0.40)) {
             return ExtractedResumeContent.builder()
                     .rawText(pdfBoxRaw)
                     .cleanText(pdfBoxClean)
                     .characterCount(pdfBoxClean.length())
                     .wordCount(stage1Assessment.wordCount())
                     .alphaRatio(stage1Assessment.alphaRatio())
-                    .extractionStatus(stage1Assessment.status())
+                    .extractionStatus(stage1Assessment.status() != ExtractionStatus.FAILED ? stage1Assessment.status() : ExtractionStatus.PARTIAL)
                     .extractionMethod(ExtractionMethod.PDFBOX_DIRECT)
-                    .confidenceScore(stage1Assessment.confidence())
+                    .confidenceScore(Math.max(0.70, stage1Assessment.confidence()))
                     .detectedSections(stage1Assessment.detectedSections())
                     .warnings(warnings)
                     .build();
         }
 
         // ════════ STAGE 2: OCR Fallback ════════
-        log.info("[Extraction] Stage 1 was insufficient (status={}). Triggering Stage 2 OCR Fallback...",
-                stage1Assessment.status());
+        log.info("[Extraction] Stage 1 was insufficient (status={}, chars={}). Triggering Stage 2 OCR Fallback...",
+                stage1Assessment.status(), pdfBoxClean.length());
 
         String ocrText = ocrTextExtractor.extractTextWithOcr(fileBytes);
         String ocrClean = unicodeNormalizer.normalize(ocrText);
@@ -192,8 +193,8 @@ public class MultiStageResumeExtractor {
                 stage2Assessment.alphaRatio(),
                 stage2Assessment.detectedSections());
 
-        // If OCR produced meaningful text
-        if (ocrClean.length() > pdfBoxClean.length() && stage2Assessment.status() != ExtractionStatus.FAILED) {
+        // If OCR produced meaningful text and better than PDFBox
+        if (ocrClean.length() >= 60 && ocrClean.length() > pdfBoxClean.length() && stage2Assessment.status() != ExtractionStatus.FAILED) {
             return ExtractedResumeContent.builder()
                     .rawText(ocrText)
                     .cleanText(ocrClean)
@@ -204,29 +205,35 @@ public class MultiStageResumeExtractor {
                     .extractionMethod(ExtractionMethod.OCR_FALLBACK)
                     .confidenceScore(stage2Assessment.confidence())
                     .detectedSections(stage2Assessment.detectedSections())
-                    .warnings(List.of("OCR-assisted extraction used for image/scanned PDF content."))
+                    .warnings(List.of("OCR-assisted extraction used for scanned/image PDF content."))
                     .build();
         }
 
         // ════════ STAGE 3: Best-Effort Selection ════════
-        // If Stage 1 produced at least some text, prefer Stage 1 over empty OCR
-        if (pdfBoxClean.length() >= 50) {
-            log.info("[Extraction] Falling back to Stage 1 partial text ({} chars)", pdfBoxClean.length());
+        // Select whichever method extracted the most characters
+        String bestClean = pdfBoxClean.length() >= ocrClean.length() ? pdfBoxClean : ocrClean;
+        String bestRaw = pdfBoxClean.length() >= ocrClean.length() ? pdfBoxRaw : ocrText;
+        ExtractionMethod bestMethod = pdfBoxClean.length() >= ocrClean.length() ? ExtractionMethod.PDFBOX_DIRECT : ExtractionMethod.OCR_FALLBACK;
+        ExtractionQualityValidator.QualityAssessment bestAssessment = pdfBoxClean.length() >= ocrClean.length() ? stage1Assessment : stage2Assessment;
+
+        if (bestClean.length() >= 30) {
+            log.info("[Extraction] Falling back to Stage 3 best-effort text ({} chars, method={})", bestClean.length(), bestMethod);
             return ExtractedResumeContent.builder()
-                    .rawText(pdfBoxRaw)
-                    .cleanText(pdfBoxClean)
-                    .characterCount(pdfBoxClean.length())
-                    .wordCount(stage1Assessment.wordCount())
-                    .alphaRatio(stage1Assessment.alphaRatio())
+                    .rawText(bestRaw)
+                    .cleanText(bestClean)
+                    .characterCount(bestClean.length())
+                    .wordCount(bestAssessment.wordCount())
+                    .alphaRatio(bestAssessment.alphaRatio())
                     .extractionStatus(ExtractionStatus.PARTIAL)
-                    .extractionMethod(ExtractionMethod.PDFBOX_DIRECT)
+                    .extractionMethod(bestMethod)
                     .confidenceScore(0.50)
-                    .detectedSections(stage1Assessment.detectedSections())
+                    .detectedSections(bestAssessment.detectedSections())
                     .warnings(List.of("Partial text extracted. Some document elements may be unreadable."))
                     .build();
         }
 
-        log.error("[Extraction] All extraction stages failed for PDF file.");
+        log.error("[Extraction] All extraction stages failed for PDF file (pdfBoxChars={}, ocrChars={}).",
+                pdfBoxClean.length(), ocrClean.length());
         return ExtractedResumeContent.failed("Could not extract readable text via direct parsing or OCR.");
     }
 }

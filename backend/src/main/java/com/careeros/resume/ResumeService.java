@@ -44,7 +44,14 @@ public class ResumeService {
         // 1. Validate file
         validateFile(file);
 
-        // 2. Store file to disk
+        byte[] fileBytes;
+        try {
+            fileBytes = file.getBytes();
+        } catch (IOException e) {
+            throw new ResumeUploadException("Failed to read uploaded file", e);
+        }
+
+        // 2. Store file to disk (for temporary caching/tools)
         ResumeMetadata metadata;
         try {
             metadata = storageService.storeFile(file);
@@ -55,14 +62,13 @@ public class ResumeService {
         // 3. Multi-stage text extraction
         String extractedText;
         try {
-            byte[] fileBytes = Files.readAllBytes(storageService.getFilePath(metadata.getStoredFileName()));
             ExtractedResumeContent content = parserService.extractContent(fileBytes, metadata.getFileType());
-            extractedText = content.getCleanText();
+            extractedText = content != null ? content.getCleanText() : "";
             log.info("Extraction completed for resume '{}': status={}, method={}, chars={}",
                     metadata.getOriginalFileName(),
-                    content.getExtractionStatus(),
-                    content.getExtractionMethod(),
-                    content.getCharacterCount());
+                    content != null ? content.getExtractionStatus() : "NULL",
+                    content != null ? content.getExtractionMethod() : "NULL",
+                    content != null ? content.getCharacterCount() : 0);
         } catch (Exception e) {
             log.warn("Failed to parse resume text for file: {}", metadata.getOriginalFileName(), e);
             extractedText = "";
@@ -87,6 +93,7 @@ public class ResumeService {
             entity.setStoredFileName(metadata.getStoredFileName());
             entity.setFileSize(metadata.getFileSize());
             entity.setFileType(metadata.getFileType());
+            entity.setFileData(fileBytes);
             entity.setExtractedText(extractedText);
             entity.setUploadDate(java.time.LocalDateTime.now());
         } else {
@@ -97,12 +104,13 @@ public class ResumeService {
                     metadata.getFileSize(),
                     metadata.getFileType()
             );
+            entity.setFileData(fileBytes);
             entity.setExtractedText(extractedText);
         }
 
         ResumeEntity saved = resumeRepository.save(entity);
-        log.info("Resume saved successfully: id={}, userId={}, file={}",
-                saved.getId(), userId, saved.getOriginalFileName());
+        log.info("Resume saved successfully: id={}, userId={}, file={}, durableBytes={}",
+                saved.getId(), userId, saved.getOriginalFileName(), fileBytes.length);
 
         return ResumeResponse.fromEntity(saved);
     }
@@ -114,29 +122,44 @@ public class ResumeService {
         if (resume == null) return null;
 
         String text = resume.getExtractedText();
-        boolean needsExtraction = text == null || text.isBlank() || text.startsWith("[Parsing failed");
+        boolean needsExtraction = text == null || text.isBlank() || text.startsWith("[Parsing failed") || text.startsWith("Could not extract");
 
         if (!needsExtraction) {
             return resume;
         }
 
-        log.info("Heal/re-extract triggered for resumeId={}", resume.getId());
-        try {
-            Path filePath = storageService.getFilePath(resume.getStoredFileName());
-            if (Files.exists(filePath)) {
-                byte[] bytes = Files.readAllBytes(filePath);
+        log.info("[HEAL] Heal/re-extract triggered for resumeId={}", resume.getId());
+        byte[] bytes = resume.getFileData();
+
+        // If fileData is null, attempt to read from disk and backfill fileData
+        if (bytes == null || bytes.length == 0) {
+            try {
+                Path filePath = storageService.getFilePath(resume.getStoredFileName());
+                if (Files.exists(filePath)) {
+                    bytes = Files.readAllBytes(filePath);
+                    resume.setFileData(bytes);
+                    log.info("[HEAL] Backfilled missing fileData from disk for resumeId={}", resume.getId());
+                }
+            } catch (Exception e) {
+                log.warn("[HEAL] Could not read disk file for resumeId={}: {}", resume.getId(), e.getMessage());
+            }
+        }
+
+        if (bytes != null && bytes.length > 0) {
+            try {
                 ExtractedResumeContent content = parserService.extractContent(bytes, resume.getFileType());
                 if (content != null && !content.getCleanText().isBlank()) {
                     resume.setExtractedText(content.getCleanText());
                     ResumeEntity updated = resumeRepository.save(resume);
-                    log.info("Successfully healed text for resumeId={}: new length={}", resume.getId(), content.getCleanText().length());
+                    log.info("[HEAL SUCCESS] Successfully healed text for resumeId={}: new length={}, status={}, method={}",
+                            resume.getId(), content.getCleanText().length(), content.getExtractionStatus(), content.getExtractionMethod());
                     return updated;
                 }
-            } else {
-                log.warn("Stored file not found on disk for resumeId={}: {}", resume.getId(), resume.getStoredFileName());
+            } catch (Exception e) {
+                log.error("[HEAL ERROR] Failed to re-extract text for resumeId={}: {}", resume.getId(), e.getMessage());
             }
-        } catch (Exception e) {
-            log.error("Failed to heal extracted text for resumeId={}: {}", resume.getId(), e.getMessage());
+        } else {
+            log.warn("[HEAL WARNING] Neither durable database fileData nor local disk file found for resumeId={}", resume.getId());
         }
 
         return resume;

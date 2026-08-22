@@ -29,6 +29,11 @@ public class ResumeEntity {
     @Column(columnDefinition = "TEXT")
     private String extractedText;
 
+    @Lob
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "file_data")
+    private byte[] fileData;
+
     @Column(nullable = false)
     private LocalDateTime uploadDate;
 
@@ -100,6 +105,14 @@ public class ResumeEntity {
 
     public void setExtractedText(String extractedText) {
         this.extractedText = extractedText;
+    }
+
+    public byte[] getFileData() {
+        return fileData;
+    }
+
+    public void setFileData(byte[] fileData) {
+        this.fileData = fileData;
     }
 
     public LocalDateTime getUploadDate() {

@@ -80,6 +80,28 @@ class MultiStageResumeExtractorTest {
     }
 
     @Test
+    void testResumeWithPartialHeadings_ExtractsDirectlyViaPdfBox() throws IOException {
+        byte[] pdfBytes = createPdfWithText("""
+                Atul Yadav
+                Software Development Engineer
+                atul.yadav@example.com
+                
+                Professional Experience
+                Senior Backend Engineer at TechCorp Inc (2021 - Present)
+                Built high-throughput data processing pipelines using Java 17, Spring Boot, and PostgreSQL.
+                Implemented microservices architecture with Docker and Kubernetes on AWS.
+                """);
+
+        ExtractedResumeContent content = extractor.extract(pdfBytes, "pdf");
+
+        assertNotNull(content);
+        assertEquals(ExtractionMethod.PDFBOX_DIRECT, content.getExtractionMethod());
+        assertNotEquals(ExtractionStatus.FAILED, content.getExtractionStatus());
+        assertTrue(content.getCleanText().contains("Atul Yadav"));
+        assertTrue(content.getCleanText().contains("Spring Boot"));
+    }
+
+    @Test
     void testScannedImagePdf_TriggersOcrFallback() throws IOException {
         // Create empty text PDF (simulating scanned/image PDF without text streams)
         byte[] emptyPdfBytes = createEmptyPdf();
