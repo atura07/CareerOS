@@ -1,6 +1,8 @@
 package com.careeros.resume;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.LocalDateTime;
 
 @Entity
@@ -29,6 +31,7 @@ public class ResumeEntity {
     @Column(columnDefinition = "TEXT")
     private String extractedText;
 
+    @JdbcTypeCode(SqlTypes.VARBINARY)
     @Column(name = "file_data", columnDefinition = "BYTEA")
     private byte[] fileData;
 
