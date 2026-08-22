@@ -56,7 +56,7 @@ public class DashboardServiceImpl implements DashboardService {
                 : "Candidate";
         String firstName = fullName.contains(" ") ? fullName.split(" ")[0] : fullName;
 
-        // 1. Fetch real entity data with individual try-catch blocks for maximum resilience
+        // 1. Fetch real entity data with individual resilience
         List<ResumeEntity> resumes = safeFetchResumes(userId);
         List<InterviewSessionEntity> sessions = safeFetchInterviews(userId);
         List<ApplicationEntity> applications = safeFetchApplications(userId);
@@ -108,7 +108,6 @@ public class DashboardServiceImpl implements DashboardService {
                     tasksTotal += 1;
                 }
             } catch (Exception e) {
-                // Fallback to progressPercentage if lazy loading is not accessible
                 if (cp.getProgressPercentage() != null && cp.getProgressPercentage() > 0) {
                     completedTasksTotal += 1;
                     tasksTotal += 1;
@@ -125,12 +124,12 @@ public class DashboardServiceImpl implements DashboardService {
                 .subtitle("Let's build your placement profile step by step.")
                 .build();
 
-        // 3. Placement Readiness Calculation (Honest & Dynamic)
+        // 3. Placement Readiness Calculation (Honest, Fully Data-Driven & Explainable)
         DashboardSummaryDto.PlacementReadinessDto readiness = calculatePlacementReadiness(
-                hasResume, atsScore, completedSessions, companyPreps, completedTasksTotal, tasksTotal, applications, hasRoadmap
+                hasResume, atsScore, completedSessions, companyPreps, completedTasksTotal, tasksTotal, applications, activeAppsCount, hasRoadmap
         );
 
-        // 4. Journey Status Cards (5 Cards)
+        // 4. Journey Status Cards (5 Pillars with honest state & correct pluralization)
         DashboardSummaryDto.JourneyStatusDto journey = buildJourneyStatus(
                 latestResume, atsScore, completedSessions, companyPreps, completedTasksTotal, applications, activeAppsCount, offersCount
         );
@@ -140,7 +139,7 @@ public class DashboardServiceImpl implements DashboardService {
                 hasResume, atsScore, hasInterview, hasCompanyPrep, hasApplications, hasRoadmap, latestResume, latestCompletedInterview
         );
 
-        // 6. Recent Activity (aggregated from real entity timestamps)
+        // 6. Recent Activity (strictly deduplicated and chronological)
         List<DashboardSummaryDto.RecentActivityDto> recentActivity = buildRecentActivity(
                 resumes, completedSessions, applications, companyPreps, roadmaps
         );
@@ -198,11 +197,10 @@ public class DashboardServiceImpl implements DashboardService {
         try {
             return applicationRepository.findByUserIdOrderByLastUpdatedDesc(userId);
         } catch (Exception e) {
-            log.warn("[DASHBOARD] Error fetching applications by lastUpdated for userId={}: {}", userId, e.getMessage());
+            log.warn("[DASHBOARD] Error fetching applications for userId={}: {}", userId, e.getMessage());
             try {
                 return applicationRepository.findByUserId(userId);
-            } catch (Exception ex) {
-                log.warn("[DASHBOARD] Error fetching applications by userId={}: {}", userId, ex.getMessage());
+            } catch (Exception ignored) {
                 return Collections.emptyList();
             }
         }
@@ -240,7 +238,7 @@ public class DashboardServiceImpl implements DashboardService {
     private DashboardSummaryDto.PlacementReadinessDto calculatePlacementReadiness(
             boolean hasResume, Integer atsScore, List<InterviewSessionEntity> completedSessions,
             List<UserCompanyPreparationEntity> companyPreps, int completedTasksTotal, int tasksTotal,
-            List<ApplicationEntity> applications, boolean hasRoadmap) {
+            List<ApplicationEntity> applications, long activeAppsCount, boolean hasRoadmap) {
 
         int completedMilestones = 0;
         List<String> requiredMilestones = new ArrayList<>();
@@ -271,6 +269,106 @@ public class DashboardServiceImpl implements DashboardService {
 
         int totalMilestones = 4;
 
+        // Calculate real weighted category scores (Total Max = 100)
+        // 1. Resume & ATS Component (Max 25 pts)
+        double resumePts = 0.0;
+        String resumeStatusText;
+        if (hasResume) {
+            resumePts += 10.0;
+            if (atsScore != null && atsScore > 0) {
+                resumePts += (Math.min(100, atsScore) / 100.0) * 15.0;
+                resumeStatusText = "ATS Score: " + atsScore + "/100 (+" + Math.round(resumePts) + " pts)";
+            } else {
+                resumePts += 5.0;
+                resumeStatusText = "Resume uploaded without ATS score (+15 pts)";
+            }
+        } else {
+            resumeStatusText = "No resume uploaded (+0 pts)";
+        }
+
+        // 2. Mock Interview Performance (Max 35 pts)
+        double interviewPts = 0.0;
+        String interviewStatusText;
+        if (!completedSessions.isEmpty()) {
+            InterviewSessionEntity latest = completedSessions.get(0);
+            int interviewScore = latest.getOverallScore() != null ? latest.getOverallScore() : 70;
+            interviewPts = (Math.min(100, interviewScore) / 100.0) * 30.0 + (completedSessions.size() > 1 ? 5.0 : 2.5);
+            int intCount = completedSessions.size();
+            interviewStatusText = intCount + " " + (intCount == 1 ? "interview completed" : "interviews completed")
+                    + " (Latest: " + interviewScore + "/100, +" + Math.round(interviewPts) + " pts)";
+        } else {
+            interviewStatusText = "No completed mock interviews (+0 pts)";
+        }
+
+        // 3. Company Prep & Topics (Max 20 pts)
+        double prepPts = 0.0;
+        String prepStatusText;
+        if (!companyPreps.isEmpty()) {
+            prepPts += 6.0;
+            if (tasksTotal > 0) {
+                prepPts += ((double) completedTasksTotal / tasksTotal) * 10.0;
+            }
+            if (hasRoadmap) {
+                prepPts += 4.0;
+            }
+            int trackCount = companyPreps.size();
+            prepStatusText = trackCount + " " + (trackCount == 1 ? "company track" : "company tracks") + ", "
+                    + completedTasksTotal + " " + (completedTasksTotal == 1 ? "topic mastered" : "topics mastered")
+                    + " (+" + Math.round(prepPts) + " pts)";
+        } else if (hasRoadmap) {
+            prepPts += 8.0;
+            prepStatusText = "Custom roadmap generated (+8 pts)";
+        } else {
+            prepStatusText = "No company tracks or roadmap started (+0 pts)";
+        }
+
+        // 4. Job Applications & Pipeline (Max 20 pts)
+        double appPts = 0.0;
+        String appStatusText;
+        if (!applications.isEmpty()) {
+            appPts += Math.min(10.0, applications.size() * 3.0);
+            long interviewStages = applications.stream()
+                    .filter(a -> a != null && a.getStatus() != null && (a.getStatus().contains("Interview") || a.getStatus().contains("OA") || a.getStatus().contains("Offer")))
+                    .count();
+            appPts += Math.min(10.0, interviewStages * 4.0);
+            int appCount = applications.size();
+            appStatusText = appCount + " " + (appCount == 1 ? "application tracked" : "applications tracked")
+                    + " (" + activeAppsCount + " active, +" + Math.round(appPts) + " pts)";
+        } else {
+            appStatusText = "No job applications tracked (+0 pts)";
+        }
+
+        List<DashboardSummaryDto.ScoreCategoryDto> breakdown = List.of(
+                DashboardSummaryDto.ScoreCategoryDto.builder()
+                        .category("Resume & ATS Analysis")
+                        .earnedScore((int) Math.round(Math.min(25.0, resumePts)))
+                        .maxScore(25)
+                        .statusText(resumeStatusText)
+                        .icon("FileText")
+                        .build(),
+                DashboardSummaryDto.ScoreCategoryDto.builder()
+                        .category("Mock Interview Performance")
+                        .earnedScore((int) Math.round(Math.min(35.0, interviewPts)))
+                        .maxScore(35)
+                        .statusText(interviewStatusText)
+                        .icon("Mic")
+                        .build(),
+                DashboardSummaryDto.ScoreCategoryDto.builder()
+                        .category("Company & Topic Prep")
+                        .earnedScore((int) Math.round(Math.min(20.0, prepPts)))
+                        .maxScore(20)
+                        .statusText(prepStatusText)
+                        .icon("Building2")
+                        .build(),
+                DashboardSummaryDto.ScoreCategoryDto.builder()
+                        .category("Job Applications Pipeline")
+                        .earnedScore((int) Math.round(Math.min(20.0, appPts)))
+                        .maxScore(20)
+                        .statusText(appStatusText)
+                        .icon("Briefcase")
+                        .build()
+        );
+
         // If user has completed fewer than 2 core milestones, honest "NOT_ENOUGH_DATA" state
         if (completedMilestones < 2) {
             return DashboardSummaryDto.PlacementReadinessDto.builder()
@@ -285,59 +383,11 @@ public class DashboardServiceImpl implements DashboardService {
                     .strongestArea(hasResume ? "Resume on File" : (!completedSessions.isEmpty() ? "Interview Practice" : null))
                     .areaNeedingAttention(requiredMilestones.isEmpty() ? null : requiredMilestones.get(0))
                     .recommendedNextAction(requiredMilestones.isEmpty() ? "Practice more interview questions" : requiredMilestones.get(0))
+                    .breakdown(breakdown)
                     .build();
         }
 
-        // Calculate weighted score (0 to 100)
-        double scoreTotal = 0.0;
-
-        // 1. Resume & ATS Component (Max 25 pts)
-        double resumePts = 0.0;
-        if (hasResume) {
-            resumePts += 10.0;
-            if (atsScore != null && atsScore > 0) {
-                resumePts += (Math.min(100, atsScore) / 100.0) * 15.0;
-            } else {
-                resumePts += 7.0; // Partial score for having resume text
-            }
-        }
-        scoreTotal += resumePts;
-
-        // 2. Mock Interview Performance (Max 35 pts)
-        double interviewPts = 0.0;
-        if (!completedSessions.isEmpty()) {
-            InterviewSessionEntity latest = completedSessions.get(0);
-            int interviewScore = latest.getOverallScore() != null ? latest.getOverallScore() : 70;
-            interviewPts = (Math.min(100, interviewScore) / 100.0) * 30.0 + (completedSessions.size() > 1 ? 5.0 : 2.5);
-        }
-        scoreTotal += Math.min(35.0, interviewPts);
-
-        // 3. Company Prep & Topics (Max 20 pts)
-        double prepPts = 0.0;
-        if (!companyPreps.isEmpty()) {
-            prepPts += 6.0;
-            if (tasksTotal > 0) {
-                prepPts += ((double) completedTasksTotal / tasksTotal) * 10.0;
-            }
-            if (hasRoadmap) {
-                prepPts += 4.0;
-            }
-        } else if (hasRoadmap) {
-            prepPts += 8.0;
-        }
-        scoreTotal += Math.min(20.0, prepPts);
-
-        // 4. Job Applications & Pipeline (Max 20 pts)
-        double appPts = 0.0;
-        if (!applications.isEmpty()) {
-            appPts += Math.min(10.0, applications.size() * 3.0);
-            long interviewStages = applications.stream()
-                    .filter(a -> a != null && a.getStatus() != null && (a.getStatus().contains("Interview") || a.getStatus().contains("OA") || a.getStatus().contains("Offer")))
-                    .count();
-            appPts += Math.min(10.0, interviewStages * 4.0);
-        }
-        scoreTotal += Math.min(20.0, appPts);
-
+        double scoreTotal = resumePts + interviewPts + prepPts + appPts;
         int finalScore = (int) Math.round(Math.min(100.0, Math.max(15.0, scoreTotal)));
 
         String status;
@@ -356,12 +406,14 @@ public class DashboardServiceImpl implements DashboardService {
             statusLabel = "Getting Started";
         }
 
-        // Determine strongest and weakest
+        // Determine strongest and focus areas based on real data
         String strongestArea = "Resume & Profile";
         if (interviewPts > resumePts && interviewPts > prepPts) {
             strongestArea = "Mock Interview Performance";
         } else if (prepPts > resumePts && prepPts > interviewPts) {
             strongestArea = "Company Topic Preparation";
+        } else if (appPts > resumePts && appPts > interviewPts) {
+            strongestArea = "Active Applications Pipeline";
         }
 
         String areaNeedingAttention = "Mock Interviews";
@@ -387,6 +439,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .strongestArea(strongestArea)
                 .areaNeedingAttention(areaNeedingAttention)
                 .recommendedNextAction(requiredMilestones.isEmpty() ? "Take an advanced mock interview" : requiredMilestones.get(0))
+                .breakdown(breakdown)
                 .build();
     }
 
@@ -440,12 +493,14 @@ public class DashboardServiceImpl implements DashboardService {
                     .isCompleted(false)
                     .build();
         } else {
+            int trackCount = companyPreps.size();
+            String topicMetric = completedTasksTotal + " " + (completedTasksTotal == 1 ? "Topic Mastered" : "Topics Mastered");
             dsaCard = DashboardSummaryDto.CardStatus.builder()
                     .key("dsa")
                     .title("Company Prep")
                     .state("IN_PROGRESS")
-                    .stateLabel(companyPreps.size() + " Company " + (companyPreps.size() == 1 ? "Track" : "Tracks"))
-                    .primaryMetric(completedTasksTotal + " Topics Mastered")
+                    .stateLabel(trackCount + " " + (trackCount == 1 ? "Company Track" : "Company Tracks"))
+                    .primaryMetric(topicMetric)
                     .subtitle("Targeted placement prep")
                     .ctaLabel("Continue Prep")
                     .ctaLink("/dashboard/companies")
@@ -471,11 +526,12 @@ public class DashboardServiceImpl implements DashboardService {
             InterviewSessionEntity latest = completedSessions.get(0);
             String scoreStr = latest.getOverallScore() != null ? ("Latest Score: " + latest.getOverallScore() + "/100") : "Report Available";
             String compName = latest.getCompanyName() != null ? latest.getCompanyName() : "Placement Practice";
+            int sessionCount = completedSessions.size();
             interviewCard = DashboardSummaryDto.CardStatus.builder()
                     .key("interview")
                     .title("Mock Interview")
                     .state("COMPLETED")
-                    .stateLabel(completedSessions.size() + " Completed")
+                    .stateLabel(sessionCount + " " + (sessionCount == 1 ? "Interview Completed" : "Interviews Completed"))
                     .primaryMetric(scoreStr)
                     .subtitle(compName)
                     .ctaLabel("Take Another")
@@ -484,17 +540,17 @@ public class DashboardServiceImpl implements DashboardService {
                     .build();
         }
 
-        // 4. GitHub
+        // 4. GitHub Integration (Honest empty state when unlinked)
         DashboardSummaryDto.CardStatus githubCard = DashboardSummaryDto.CardStatus.builder()
                 .key("github")
-                .title("GitHub Profile")
-                .state("CONNECTED")
-                .stateLabel("Developer Profile")
-                .primaryMetric("Activity Tracker")
-                .subtitle("View commits & repository health")
-                .ctaLabel("View GitHub")
+                .title("GitHub Integration")
+                .state("NOT_CONNECTED")
+                .stateLabel("Not Connected")
+                .primaryMetric("GitHub Not Connected")
+                .subtitle("Link profile for repo & commit sync")
+                .ctaLabel("Connect GitHub")
                 .ctaLink("/dashboard/github")
-                .isCompleted(true)
+                .isCompleted(false)
                 .build();
 
         // 5. Applications
@@ -512,13 +568,18 @@ public class DashboardServiceImpl implements DashboardService {
                     .isCompleted(false)
                     .build();
         } else {
-            String subtitle = offersCount > 0 ? (offersCount + " Offer(s) Received 🎉") : (activeAppsCount + " in active pipeline");
+            int totalApps = applications.size();
+            String appMetric = activeAppsCount + " " + (activeAppsCount == 1 ? "Active Application" : "Active Applications");
+            String subtitle = offersCount > 0
+                    ? (offersCount + " " + (offersCount == 1 ? "Offer Received 🎉" : "Offers Received 🎉"))
+                    : (activeAppsCount + " in active pipeline");
+
             appsCard = DashboardSummaryDto.CardStatus.builder()
                     .key("applications")
                     .title("Applications")
                     .state("ACTIVE")
-                    .stateLabel(applications.size() + " Total")
-                    .primaryMetric(activeAppsCount + " Active Applications")
+                    .stateLabel(totalApps + " Total")
+                    .primaryMetric(appMetric)
                     .subtitle(subtitle)
                     .ctaLabel("Manage Pipeline")
                     .ctaLink("/dashboard/applications")
@@ -652,79 +713,92 @@ public class DashboardServiceImpl implements DashboardService {
             List<RoadmapEntity> roadmaps) {
 
         List<DashboardSummaryDto.RecentActivityDto> activities = new ArrayList<>();
+        Set<String> seenIds = new HashSet<>();
         DateTimeFormatter isoFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
-        // Resumes
+        // 1. Resumes (deduplicated by ID)
         for (ResumeEntity r : resumes) {
-            if (r != null && r.getUploadDate() != null) {
-                String fileName = r.getOriginalFileName() != null ? r.getOriginalFileName() : "Resume";
-                activities.add(DashboardSummaryDto.RecentActivityDto.builder()
-                        .id("act-res-" + (r.getId() != null ? r.getId() : UUID.randomUUID().toString()))
-                        .title("Resume Uploaded")
-                        .description(fileName + " uploaded for analysis")
-                        .type("RESUME_UPLOAD")
-                        .timestamp(r.getUploadDate().format(isoFormatter))
-                        .relativeTime(formatRelativeTime(r.getUploadDate()))
-                        .link("/dashboard/resume")
-                        .build());
+            if (r != null && r.getId() != null && r.getUploadDate() != null) {
+                String actId = "act-res-" + r.getId();
+                if (seenIds.add(actId)) {
+                    String fileName = r.getOriginalFileName() != null ? r.getOriginalFileName() : "Resume";
+                    activities.add(DashboardSummaryDto.RecentActivityDto.builder()
+                            .id(actId)
+                            .title("Resume Uploaded")
+                            .description(fileName + " uploaded for analysis")
+                            .type("RESUME_UPLOAD")
+                            .timestamp(r.getUploadDate().format(isoFormatter))
+                            .relativeTime(formatRelativeTime(r.getUploadDate()))
+                            .link("/dashboard/resume")
+                            .build());
+                }
             }
         }
 
-        // Completed Interviews
+        // 2. Completed Mock Interviews (strictly deduplicated by Session ID)
         for (InterviewSessionEntity s : completedSessions) {
-            if (s == null) continue;
-            LocalDateTime time = s.getEndedAt() != null ? s.getEndedAt() : s.getStartedAt();
-            if (time != null) {
-                String compName = s.getCompanyName() != null ? s.getCompanyName() : "Interview Practice";
-                String diff = s.getDifficulty() != null ? s.getDifficulty() : "Practice";
-                String scoreTxt = s.getOverallScore() != null ? ("Scored " + s.getOverallScore() + "/100") : "Completed";
-                activities.add(DashboardSummaryDto.RecentActivityDto.builder()
-                        .id("act-int-" + (s.getId() != null ? s.getId() : UUID.randomUUID().toString()))
-                        .title("Mock Interview Completed")
-                        .description(compName + " (" + diff + ") · " + scoreTxt)
-                        .type("INTERVIEW_COMPLETED")
-                        .timestamp(time.format(isoFormatter))
-                        .relativeTime(formatRelativeTime(time))
-                        .link("/dashboard/interview")
-                        .build());
+            if (s == null || s.getId() == null) continue;
+            String actId = "act-int-" + s.getId();
+            if (seenIds.add(actId)) {
+                LocalDateTime time = s.getEndedAt() != null ? s.getEndedAt() : s.getStartedAt();
+                if (time != null) {
+                    String compName = s.getCompanyName() != null ? s.getCompanyName() : "Interview Practice";
+                    String diff = s.getDifficulty() != null ? s.getDifficulty() : "Practice";
+                    String scoreTxt = s.getOverallScore() != null ? ("Scored " + s.getOverallScore() + "/100") : "Completed";
+                    activities.add(DashboardSummaryDto.RecentActivityDto.builder()
+                            .id(actId)
+                            .title("Mock Interview Completed")
+                            .description(compName + " (" + diff + ") · " + scoreTxt)
+                            .type("INTERVIEW_COMPLETED")
+                            .timestamp(time.format(isoFormatter))
+                            .relativeTime(formatRelativeTime(time))
+                            .link("/dashboard/interview")
+                            .build());
+                }
             }
         }
 
-        // Applications
+        // 3. Applications (deduplicated by Application ID)
         for (ApplicationEntity a : applications) {
-            if (a == null) continue;
-            LocalDateTime time = a.getUpdatedAt() != null ? a.getUpdatedAt() : a.getCreatedAt();
-            if (time != null) {
-                String compName = a.getCompanyName() != null ? a.getCompanyName() : "Job Application";
-                String roleName = a.getRole() != null ? a.getRole() : "Candidate";
-                String statusName = a.getStatus() != null ? a.getStatus() : "Applied";
-                activities.add(DashboardSummaryDto.RecentActivityDto.builder()
-                        .id("act-app-" + (a.getId() != null ? a.getId() : UUID.randomUUID().toString()))
-                        .title("Application: " + compName)
-                        .description(roleName + " · Status: " + statusName)
-                        .type("APPLICATION_ADDED")
-                        .timestamp(time.format(isoFormatter))
-                        .relativeTime(formatRelativeTime(time))
-                        .link("/dashboard/applications")
-                        .build());
+            if (a == null || a.getId() == null) continue;
+            String actId = "act-app-" + a.getId();
+            if (seenIds.add(actId)) {
+                LocalDateTime time = a.getUpdatedAt() != null ? a.getUpdatedAt() : a.getCreatedAt();
+                if (time != null) {
+                    String compName = a.getCompanyName() != null ? a.getCompanyName() : "Job Application";
+                    String roleName = a.getRole() != null ? a.getRole() : "Candidate";
+                    String statusName = a.getStatus() != null ? a.getStatus() : "Applied";
+                    activities.add(DashboardSummaryDto.RecentActivityDto.builder()
+                            .id(actId)
+                            .title("Application: " + compName)
+                            .description(roleName + " · Status: " + statusName)
+                            .type("APPLICATION_ADDED")
+                            .timestamp(time.format(isoFormatter))
+                            .relativeTime(formatRelativeTime(time))
+                            .link("/dashboard/applications")
+                            .build());
+                }
             }
         }
 
-        // Roadmaps
+        // 4. Roadmaps (deduplicated by Roadmap ID)
         for (RoadmapEntity rm : roadmaps) {
-            if (rm != null && rm.getCreatedAt() != null) {
-                String comp = rm.getCompany() != null ? rm.getCompany() : "Career";
-                String role = rm.getRole() != null ? rm.getRole() : "Developer";
-                String duration = rm.getDuration() != null ? rm.getDuration() : "8 Weeks";
-                activities.add(DashboardSummaryDto.RecentActivityDto.builder()
-                        .id("act-rm-" + (rm.getId() != null ? rm.getId() : UUID.randomUUID().toString()))
-                        .title("Roadmap Generated")
-                        .description(comp + " · " + role + " (" + duration + ")")
-                        .type("ROADMAP_GENERATED")
-                        .timestamp(rm.getCreatedAt().format(isoFormatter))
-                        .relativeTime(formatRelativeTime(rm.getCreatedAt()))
-                        .link("/dashboard/roadmap")
-                        .build());
+            if (rm != null && rm.getId() != null && rm.getCreatedAt() != null) {
+                String actId = "act-rm-" + rm.getId();
+                if (seenIds.add(actId)) {
+                    String comp = rm.getCompany() != null ? rm.getCompany() : "Career";
+                    String role = rm.getRole() != null ? rm.getRole() : "Developer";
+                    String duration = rm.getDuration() != null ? rm.getDuration() : "8 Weeks";
+                    activities.add(DashboardSummaryDto.RecentActivityDto.builder()
+                            .id(actId)
+                            .title("Roadmap Generated")
+                            .description(comp + " · " + role + " (" + duration + ")")
+                            .type("ROADMAP_GENERATED")
+                            .timestamp(rm.getCreatedAt().format(isoFormatter))
+                            .relativeTime(formatRelativeTime(rm.getCreatedAt()))
+                            .link("/dashboard/roadmap")
+                            .build());
+                }
             }
         }
 
@@ -768,12 +842,12 @@ public class DashboardServiceImpl implements DashboardService {
         LocalDateTime now = LocalDateTime.now();
         long minutes = ChronoUnit.MINUTES.between(dateTime, now);
         if (minutes < 2) return "Just now";
-        if (minutes < 60) return minutes + " mins ago";
+        if (minutes < 60) return minutes + " " + (minutes == 1 ? "min ago" : "mins ago");
         long hours = ChronoUnit.HOURS.between(dateTime, now);
-        if (hours < 24) return hours + " hour" + (hours > 1 ? "s" : "") + " ago";
+        if (hours < 24) return hours + " " + (hours == 1 ? "hour ago" : "hours ago");
         long days = ChronoUnit.DAYS.between(dateTime, now);
         if (days == 1) return "Yesterday";
-        if (days < 30) return days + " days ago";
+        if (days < 30) return days + " " + (days == 1 ? "day ago" : "days ago");
         return dateTime.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"));
     }
 }

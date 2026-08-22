@@ -1,4 +1,5 @@
-import { motion } from 'framer-motion'
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Trophy,
   AlertCircle,
@@ -7,6 +8,12 @@ import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
+  ChevronDown,
+  FileText,
+  Mic,
+  Building2,
+  Briefcase,
+  Info,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { PlacementReadinessData } from '../../services/api/dashboardService'
@@ -16,6 +23,8 @@ interface PlacementReadinessCardProps {
 }
 
 export function PlacementReadinessCard({ readiness }: PlacementReadinessCardProps) {
+  const [showExplanation, setShowExplanation] = useState(false)
+
   if (!readiness) return null
 
   const isAvailable = readiness.available && readiness.score !== null
@@ -33,6 +42,21 @@ export function PlacementReadinessCard({ readiness }: PlacementReadinessCardProp
     }
   }
 
+  const getCategoryIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'FileText':
+        return <FileText className="h-4 w-4 text-blue-400" />
+      case 'Mic':
+        return <Mic className="h-4 w-4 text-emerald-400" />
+      case 'Building2':
+        return <Building2 className="h-4 w-4 text-purple-400" />
+      case 'Briefcase':
+        return <Briefcase className="h-4 w-4 text-sky-400" />
+      default:
+        return <Target className="h-4 w-4 text-amber-400" />
+    }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -43,14 +67,16 @@ export function PlacementReadinessCard({ readiness }: PlacementReadinessCardProp
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         {/* Left side: title + message or score breakdown */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-amber-400" />
-            <h2 className="text-base sm:text-lg font-bold tracking-tight text-white/95">
-              Placement Readiness
-            </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-amber-400" />
+              <h2 className="text-base sm:text-lg font-bold tracking-tight text-white/95">
+                Placement Readiness
+              </h2>
+            </div>
             {isAvailable && (
               <span
-                className={`ml-2 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadge(
+                className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadge(
                   readiness.status
                 )}`}
               >
@@ -60,7 +86,7 @@ export function PlacementReadinessCard({ readiness }: PlacementReadinessCardProp
           </div>
 
           {!isAvailable ? (
-            /* STATE A: INSUFFICIENT DATA */
+            /* STATE A: INSUFFICIENT DATA (HONEST ZERO-DATA STATE) */
             <div className="mt-4 space-y-4">
               <div className="flex items-start gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/05 p-4 text-xs text-blue-300">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-blue-400" />
@@ -133,10 +159,27 @@ export function PlacementReadinessCard({ readiness }: PlacementReadinessCardProp
               </div>
             </div>
           )}
+
+          {/* How this score is calculated toggle button */}
+          <div className="mt-4 pt-2">
+            <button
+              onClick={() => setShowExplanation(!showExplanation)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/60 hover:text-blue-400 transition-colors"
+              aria-expanded={showExplanation}
+            >
+              <Info className="h-3.5 w-3.5" />
+              <span>How this score is calculated</span>
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                  showExplanation ? 'rotate-180 text-blue-400' : ''
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Right side: Score representation or Unlock Card */}
-        <div className="shrink-0 w-full sm:w-auto">
+        <div className="shrink-0 w-full lg:w-auto">
           {isAvailable ? (
             <div className="flex flex-row sm:flex-col items-center justify-between sm:justify-center gap-4 rounded-3xl border border-white/[0.08] bg-black/40 p-6 text-center">
               <div>
@@ -156,12 +199,13 @@ export function PlacementReadinessCard({ readiness }: PlacementReadinessCardProp
               </Link>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/[0.08] bg-black/30 p-6 text-center min-w-[200px]">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/[0.08] bg-black/30 p-6 text-center min-w-[220px]">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.04] text-white/40">
                 <ShieldCheck className="h-6 w-6" />
               </div>
               <div className="text-xs font-semibold text-white/70">
-                {readiness.completedMilestonesCount} of {readiness.totalMilestonesCount} Milestones
+                {readiness.completedMilestonesCount} of {readiness.totalMilestonesCount}{' '}
+                {readiness.totalMilestonesCount === 1 ? 'Milestone' : 'Milestones'}
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
                 <div
@@ -177,6 +221,84 @@ export function PlacementReadinessCard({ readiness }: PlacementReadinessCardProp
           )}
         </div>
       </div>
+
+      {/* Expandable Score Explainability Breakdown */}
+      <AnimatePresence>
+        {showExplanation && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+            className="mt-5 border-t border-white/[0.06] pt-5 overflow-hidden"
+          >
+            <div className="rounded-2xl border border-white/[0.06] bg-black/30 p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-white/80">
+                  Data-Driven Scoring Formula
+                </h4>
+                <span className="text-[11px] text-white/40">100 Pts Maximum</span>
+              </div>
+              <p className="text-xs text-white/50 leading-relaxed mb-4">
+                CareerOS calculates your placement readiness from genuine verified milestones across 4 core pillars without simulated points:
+              </p>
+
+              {readiness.breakdown && readiness.breakdown.length > 0 ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {readiness.breakdown.map((cat) => (
+                    <div
+                      key={cat.category}
+                      className="flex flex-col justify-between rounded-xl border border-white/[0.04] bg-white/[0.02] p-3.5"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-1.5">
+                            {getCategoryIcon(cat.icon)}
+                            <span className="text-xs font-semibold text-white/90">
+                              {cat.category}
+                            </span>
+                          </div>
+                          <span className="text-xs font-extrabold text-blue-400">
+                            {cat.earnedScore}/{cat.maxScore}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-white/50 leading-normal">{cat.statusText}</p>
+                      </div>
+                      <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                        <div
+                          className="h-full rounded-full bg-blue-500"
+                          style={{
+                            width: `${Math.min(100, (cat.earnedScore / cat.maxScore) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+                  <div className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-3">
+                    <span className="font-semibold text-white/90">Resume & ATS (25%)</span>
+                    <p className="text-white/50 text-[11px] mt-1">Evaluates keyword density & formatting score</p>
+                  </div>
+                  <div className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-3">
+                    <span className="font-semibold text-white/90">Mock Interview (35%)</span>
+                    <p className="text-white/50 text-[11px] mt-1">Evaluates conversational answers & problem-solving</p>
+                  </div>
+                  <div className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-3">
+                    <span className="font-semibold text-white/90">Company Prep (20%)</span>
+                    <p className="text-white/50 text-[11px] mt-1">Evaluates mastered topic coverage & study roadmaps</p>
+                  </div>
+                  <div className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-3">
+                    <span className="font-semibold text-white/90">Job Pipeline (20%)</span>
+                    <p className="text-white/50 text-[11px] mt-1">Evaluates active applications, OAs & interview rounds</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

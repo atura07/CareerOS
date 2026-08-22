@@ -9,6 +9,7 @@ import {
   ArrowUpRight,
   CheckCircle2,
   CircleDashed,
+  Unplug,
 } from 'lucide-react'
 import type { JourneyStatusData, JourneyCardStatus } from '../../services/api/dashboardService'
 
@@ -47,6 +48,33 @@ export function PlacementJourney({ journey }: PlacementJourneyProps) {
     },
   ]
 
+  const getStatusPill = (data: JourneyCardStatus) => {
+    if (data.key === 'github' && data.state === 'NOT_CONNECTED') {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border border-amber-500/30 bg-amber-500/10 text-amber-400">
+          <Unplug className="h-3 w-3" />
+          {data.stateLabel}
+        </span>
+      )
+    }
+
+    if (data.isCompleted) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+          <CheckCircle2 className="h-3 w-3" />
+          {data.stateLabel}
+        </span>
+      )
+    }
+
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border border-white/10 bg-white/[0.04] text-white/50">
+        <CircleDashed className="h-3 w-3" />
+        {data.stateLabel}
+      </span>
+    )
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -79,20 +107,7 @@ export function PlacementJourney({ journey }: PlacementJourneyProps) {
                     <Icon className="h-5 w-5" />
                   </div>
 
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
-                      data.isCompleted
-                        ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                        : 'border border-white/10 bg-white/[0.04] text-white/50'
-                    }`}
-                  >
-                    {data.isCompleted ? (
-                      <CheckCircle2 className="h-3 w-3" />
-                    ) : (
-                      <CircleDashed className="h-3 w-3" />
-                    )}
-                    {data.stateLabel}
-                  </span>
+                  {getStatusPill(data)}
                 </div>
 
                 {/* Title & Primary Metric */}
@@ -100,7 +115,7 @@ export function PlacementJourney({ journey }: PlacementJourneyProps) {
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">
                     {data.title}
                   </h3>
-                  <p className="mt-1 text-sm sm:text-base font-bold text-white/95">
+                  <p className="mt-1 text-sm sm:text-base font-bold text-white/95 truncate">
                     {data.primaryMetric}
                   </p>
                   <p className="mt-0.5 text-xs text-white/50 line-clamp-1">{data.subtitle}</p>

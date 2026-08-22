@@ -87,9 +87,15 @@ class DashboardServiceTest {
         assertEquals("NOT_UPLOADED", summary.getJourney().getResume().getState());
         assertEquals("NOT_ATTEMPTED", summary.getJourney().getMockInterview().getState());
         assertEquals("EMPTY", summary.getJourney().getApplications().getState());
+        assertEquals("NOT_CONNECTED", summary.getJourney().getGithub().getState());
+        assertEquals("GitHub Not Connected", summary.getJourney().getGithub().getPrimaryMetric());
         assertTrue(summary.getRecentActivity().isEmpty(), "Recent activity must be empty for new user");
         assertFalse(summary.getNextActions().isEmpty(), "Must provide prioritized next actions");
         assertEquals("act-resume", summary.getNextActions().get(0).getId(), "First action must be upload resume");
+
+        // Verify breakdown exists even for new user
+        assertNotNull(summary.getPlacementReadiness().getBreakdown());
+        assertEquals(4, summary.getPlacementReadiness().getBreakdown().size());
     }
 
     @Test
@@ -191,6 +197,82 @@ class DashboardServiceTest {
         assertEquals("ACTIVE", summary.getJourney().getApplications().getState());
         assertFalse(summary.getRecentActivity().isEmpty(), "Recent activity must contain real user events");
         assertEquals(3, summary.getRecentActivity().size());
+
+        // Verify explainable score breakdown
+        assertNotNull(summary.getPlacementReadiness().getBreakdown());
+        assertEquals(4, summary.getPlacementReadiness().getBreakdown().size());
+        assertTrue(summary.getPlacementReadiness().getBreakdown().stream().anyMatch(b -> b.getCategory().contains("Resume") && b.getEarnedScore() > 0));
+        assertTrue(summary.getPlacementReadiness().getBreakdown().stream().anyMatch(b -> b.getCategory().contains("Interview") && b.getEarnedScore() > 0));
+    }
+
+    @Test
+    void testRecentActivityDeduplication_WhenDuplicateSessionEntitiesReturned_IncludesEachEventOnlyOnce() {
+        User user = new User();
+        user.setId(100L);
+        user.setFullName("Rohan Gupta");
+
+        InterviewSessionEntity session1 = new InterviewSessionEntity();
+        session1.setId(42L);
+        session1.setUserId(100L);
+        session1.setCompanyName("Microsoft");
+        session1.setStatus("COMPLETED");
+        session1.setOverallScore(90);
+        session1.setEndedAt(LocalDateTime.now().minusHours(2));
+
+        // Duplicate entry with same ID (e.g. from JOIN duplication or repeated fetch)
+        InterviewSessionEntity duplicateSession = new InterviewSessionEntity();
+        duplicateSession.setId(42L);
+        duplicateSession.setUserId(100L);
+        duplicateSession.setCompanyName("Microsoft");
+        duplicateSession.setStatus("COMPLETED");
+        duplicateSession.setOverallScore(90);
+        duplicateSession.setEndedAt(LocalDateTime.now().minusHours(2));
+
+        when(userRepository.findById(100L)).thenReturn(Optional.of(user));
+        when(resumeRepository.findByUserIdOrderByUploadDateDesc(100L)).thenReturn(Collections.emptyList());
+        when(interviewSessionRepository.findByUserIdOrderByStartedAtDesc(100L)).thenReturn(List.of(session1, duplicateSession));
+        when(applicationRepository.findByUserIdOrderByLastUpdatedDesc(100L)).thenReturn(Collections.emptyList());
+        when(userCompanyPrepRepository.findByUserId(100L)).thenReturn(Collections.emptyList());
+        when(roadmapRepository.findByUserIdOrderByCreatedAtDesc(100L)).thenReturn(Collections.emptyList());
+
+        DashboardSummaryDto summary = dashboardService.getDashboardSummary(100L);
+
+        assertNotNull(summary);
+        assertEquals(1, summary.getRecentActivity().size(), "Duplicate session events must be deduplicated by session ID");
+        assertEquals("act-int-42", summary.getRecentActivity().get(0).getId());
+    }
+
+    @Test
+    void testGrammarAndPluralization_SingleItemMetrics_UseProperSingularForms() {
+        User user = new User();
+        user.setId(100L);
+        user.setFullName("Aarav");
+
+        ApplicationEntity singleApp = new ApplicationEntity();
+        singleApp.setId(10L);
+        singleApp.setCompanyName("Adobe");
+        singleApp.setStatus("Applied");
+        singleApp.setCreatedAt(LocalDateTime.now());
+
+        InterviewSessionEntity singleInterview = new InterviewSessionEntity();
+        singleInterview.setId(20L);
+        singleInterview.setStatus("COMPLETED");
+        singleInterview.setOverallScore(80);
+        singleInterview.setEndedAt(LocalDateTime.now());
+
+        when(userRepository.findById(100L)).thenReturn(Optional.of(user));
+        when(resumeRepository.findByUserIdOrderByUploadDateDesc(100L)).thenReturn(Collections.emptyList());
+        when(interviewSessionRepository.findByUserIdOrderByStartedAtDesc(100L)).thenReturn(List.of(singleInterview));
+        when(applicationRepository.findByUserIdOrderByLastUpdatedDesc(100L)).thenReturn(List.of(singleApp));
+        when(userCompanyPrepRepository.findByUserId(100L)).thenReturn(Collections.emptyList());
+        when(roadmapRepository.findByUserIdOrderByCreatedAtDesc(100L)).thenReturn(Collections.emptyList());
+
+        DashboardSummaryDto summary = dashboardService.getDashboardSummary(100L);
+
+        assertNotNull(summary);
+        // Pluralization checks
+        assertEquals("1 Interview Completed", summary.getJourney().getMockInterview().getStateLabel());
+        assertEquals("1 Active Application", summary.getJourney().getApplications().getPrimaryMetric());
     }
 
     @Test

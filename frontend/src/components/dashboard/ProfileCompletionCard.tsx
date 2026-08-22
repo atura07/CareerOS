@@ -21,7 +21,12 @@ export function ProfileCompletionCard({ profile }: ProfileCompletionCardProps) {
           <UserCheck className="h-4 w-4 text-blue-400" />
           <h2 className="text-sm font-bold tracking-tight text-white/90">Profile Completion</h2>
         </div>
-        <span className="text-xs font-bold text-blue-400">{profile.percentage}%</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-white/40 font-medium">
+            {profile.completedFieldsCount} of {profile.totalFieldsCount} completed
+          </span>
+          <span className="text-xs font-bold text-blue-400">{profile.percentage}%</span>
+        </div>
       </div>
 
       <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06] mb-4">

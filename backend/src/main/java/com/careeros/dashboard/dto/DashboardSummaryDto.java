@@ -47,6 +47,19 @@ public class DashboardSummaryDto {
         private String strongestArea;
         private String areaNeedingAttention;
         private String recommendedNextAction;
+        private List<ScoreCategoryDto> breakdown; // Real category weight and score contributions
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ScoreCategoryDto {
+        private String category; // e.g. "Resume & ATS", "Mock Interview", "Company Prep", "Job Pipeline"
+        private int earnedScore;
+        private int maxScore;
+        private String statusText; // e.g. "ATS Score: 78/100 (+19 pts)", "Not attempted (+0 pts)"
+        private String icon; // "FileText", "Mic", "Building2", "Briefcase"
     }
 
     @Data

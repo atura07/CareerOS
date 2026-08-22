@@ -60,10 +60,10 @@ export function DashboardHero({ greeting, profile }: DashboardHeroProps) {
             </div>
 
             <Link
-              to="/dashboard/profile"
+              to="/dashboard/resume"
               className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3.5 py-2 text-xs font-semibold text-white/70 hover:bg-white/[0.06] hover:text-white transition-colors"
             >
-              Profile Settings <ArrowRight className="h-3.5 w-3.5" />
+              Resume & ATS Analysis <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         </div>

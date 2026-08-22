@@ -7,6 +7,14 @@ export interface GreetingData {
   subtitle: string
 }
 
+export interface ScoreCategoryData {
+  category: string
+  earnedScore: number
+  maxScore: number
+  statusText: string
+  icon: string
+}
+
 export interface PlacementReadinessData {
   available: boolean
   score: number | null
@@ -19,6 +27,7 @@ export interface PlacementReadinessData {
   strongestArea?: string | null
   areaNeedingAttention?: string | null
   recommendedNextAction?: string | null
+  breakdown?: ScoreCategoryData[]
 }
 
 export interface JourneyCardStatus {
