@@ -29,9 +29,7 @@ public class ResumeEntity {
     @Column(columnDefinition = "TEXT")
     private String extractedText;
 
-    @Lob
-    @Basic(fetch = FetchType.LAZY)
-    @Column(name = "file_data")
+    @Column(name = "file_data", columnDefinition = "BYTEA")
     private byte[] fileData;
 
     @Column(nullable = false)
