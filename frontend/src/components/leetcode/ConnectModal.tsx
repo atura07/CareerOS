@@ -94,7 +94,7 @@ export function ConnectModal({
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. atul_yadav, neal_wu"
+                  placeholder="e.g. your_leetcode_username"
                   className="w-full rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm text-white placeholder-white/30 transition focus:border-amber-400/60 focus:bg-white/[0.07] focus:outline-none focus:ring-1 focus:ring-amber-400/60"
                   autoFocus
                 />
