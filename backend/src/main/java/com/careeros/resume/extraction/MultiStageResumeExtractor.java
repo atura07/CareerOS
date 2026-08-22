@@ -194,7 +194,8 @@ public class MultiStageResumeExtractor {
                 stage2Assessment.detectedSections());
 
         // If OCR produced meaningful text and better than PDFBox
-        if (ocrClean.length() >= 60 && ocrClean.length() > pdfBoxClean.length() && stage2Assessment.status() != ExtractionStatus.FAILED) {
+        if (ocrClean.length() >= 50 && ocrClean.length() > pdfBoxClean.length() &&
+                (stage2Assessment.status() != ExtractionStatus.FAILED || stage2Assessment.alphaRatio() >= 0.35)) {
             return ExtractedResumeContent.builder()
                     .rawText(ocrText)
                     .cleanText(ocrClean)
@@ -203,7 +204,7 @@ public class MultiStageResumeExtractor {
                     .alphaRatio(stage2Assessment.alphaRatio())
                     .extractionStatus(ExtractionStatus.OCR_USED)
                     .extractionMethod(ExtractionMethod.OCR_FALLBACK)
-                    .confidenceScore(stage2Assessment.confidence())
+                    .confidenceScore(Math.max(0.65, stage2Assessment.confidence()))
                     .detectedSections(stage2Assessment.detectedSections())
                     .warnings(List.of("OCR-assisted extraction used for scanned/image PDF content."))
                     .build();

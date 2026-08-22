@@ -1,7 +1,11 @@
 package com.careeros.resume.extraction;
 
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDResources;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.slf4j.Logger;
@@ -20,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Production-grade OCR Text Extractor.
- * Renders PDF pages to high-resolution images and executes Tesseract OCR.
+ * Renders PDF pages to high-resolution images and executes Tesseract OCR via stdout pipe streaming.
  */
 @Component
 public class OcrTextExtractor {
@@ -40,6 +44,7 @@ public class OcrTextExtractor {
             Process process = new ProcessBuilder("tesseract", "--version")
                     .redirectErrorStream(true)
                     .start();
+            byte[] output = process.getInputStream().readAllBytes();
             boolean finished = process.waitFor(3, TimeUnit.SECONDS);
             return finished && process.exitValue() == 0;
         } catch (Exception e) {
@@ -71,37 +76,57 @@ public class OcrTextExtractor {
 
             for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
                 log.debug("[OCR] Rendering page {}/{} at {} DPI", pageIndex + 1, totalPages, DPI);
-                BufferedImage image = renderer.renderImageWithDPI(pageIndex, DPI, ImageType.RGB);
+                BufferedImage image = null;
+                try {
+                    image = renderer.renderImageWithDPI(pageIndex, DPI, ImageType.RGB);
+                } catch (Exception renderEx) {
+                    log.warn("[OCR] PDFRenderer failed for page {}: {}. Attempting direct XObject extraction...", pageIndex + 1, renderEx.getMessage());
+                }
+
+                // If renderer failed, fallback to embedded image XObject
+                if (image == null && pageIndex < document.getNumberOfPages()) {
+                    PDPage page = document.getPage(pageIndex);
+                    PDResources resources = page.getResources();
+                    if (resources != null) {
+                        for (COSName name : resources.getXObjectNames()) {
+                            if (resources.isImageXObject(name)) {
+                                PDImageXObject imgObj = (PDImageXObject) resources.getXObject(name);
+                                image = imgObj.getImage();
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (image == null) {
+                    log.warn("[OCR] Could not obtain image for page {}", pageIndex + 1);
+                    continue;
+                }
 
                 Path tempImg = Files.createTempFile("ocr_page_" + pageIndex + "_", ".png");
                 tempFiles.add(tempImg);
                 ImageIO.write(image, "PNG", tempImg.toFile());
 
-                Path tempOutBase = Files.createTempFile("ocr_out_" + pageIndex + "_", "");
-                tempFiles.add(tempOutBase);
-                Path tempTxtOut = Path.of(tempOutBase.toString() + ".txt");
-                tempFiles.add(tempTxtOut);
-
-                // Run tesseract: tesseract <image> <outbase> -l eng --psm 6
+                // Run tesseract: tesseract <image> stdout -l eng
                 ProcessBuilder pb = new ProcessBuilder(
                         "tesseract",
                         tempImg.toAbsolutePath().toString(),
-                        tempOutBase.toAbsolutePath().toString(),
-                        "-l", "eng",
-                        "--oem", "1",
-                        "--psm", "6"
+                        "stdout",
+                        "-l", "eng"
                 );
-                pb.redirectErrorStream(true);
+                pb.redirectErrorStream(false);
                 Process process = pb.start();
 
-                boolean finished = process.waitFor(20, TimeUnit.SECONDS);
-                if (finished && process.exitValue() == 0 && Files.exists(tempTxtOut)) {
-                    String pageText = Files.readString(tempTxtOut, StandardCharsets.UTF_8);
+                // Read stdout directly in standard UTF-8 to prevent pipe buffer stalls
+                String pageText = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                boolean finished = process.waitFor(25, TimeUnit.SECONDS);
+
+                if (finished && process.exitValue() == 0 && !pageText.isBlank()) {
                     fullOcrText.append(pageText).append("\n\n");
-                    log.debug("[OCR] Page {} extracted ({} chars)", pageIndex + 1, pageText.length());
+                    log.info("[OCR] Page {} extracted successfully ({} chars)", pageIndex + 1, pageText.length());
                 } else {
-                    log.warn("[OCR] Tesseract failed on page {} with exit code {}",
-                            pageIndex + 1, finished ? process.exitValue() : "TIMEOUT");
+                    log.warn("[OCR] Tesseract returned exit code {} for page {} (text length: {})",
+                            finished ? process.exitValue() : "TIMEOUT", pageIndex + 1, pageText.length());
                 }
             }
         } catch (Exception e) {
