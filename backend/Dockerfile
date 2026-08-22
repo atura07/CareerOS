@@ -45,4 +45,4 @@ USER appuser
 EXPOSE 8080
 
 # Run the Spring Boot jar with container performance optimization and entropy flags
-ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "/app/careeros-backend.jar"]
+ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=60.0", "-Xss512k", "-jar", "/app/careeros-backend.jar"]

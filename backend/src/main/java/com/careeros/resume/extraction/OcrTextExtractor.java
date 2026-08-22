@@ -30,8 +30,8 @@ import java.util.concurrent.TimeUnit;
 public class OcrTextExtractor {
 
     private static final Logger log = LoggerFactory.getLogger(OcrTextExtractor.class);
-    private static final int DPI = 200; // Optimal balance of recognition accuracy and memory/processing speed
-    private static final int MAX_PAGES_OCR = 10; // Cap to prevent DOS on huge documents
+    private static final int DPI = 120; // Lightweight 120 DPI for low-memory cloud container compatibility
+    private static final int MAX_PAGES_OCR = 3; // Maximum pages to OCR on free cloud tiers
 
     private final UnicodeNormalizer unicodeNormalizer;
 
@@ -114,12 +114,19 @@ public class OcrTextExtractor {
                         "stdout",
                         "-l", "eng"
                 );
+                pb.environment().put("OMP_THREAD_LIMIT", "1");
+                pb.environment().put("OMP_NUM_THREADS", "1");
                 pb.redirectErrorStream(false);
                 Process process = pb.start();
 
                 // Read stdout directly in standard UTF-8 to prevent pipe buffer stalls
-                String pageText = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                boolean finished = process.waitFor(25, TimeUnit.SECONDS);
+                String pageText = "";
+                try (InputStream is = process.getInputStream()) {
+                    pageText = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                } catch (Exception streamEx) {
+                    log.warn("[OCR] Error reading Tesseract output stream: {}", streamEx.getMessage());
+                }
+                boolean finished = process.waitFor(15, TimeUnit.SECONDS);
 
                 if (finished && process.exitValue() == 0 && !pageText.isBlank()) {
                     fullOcrText.append(pageText).append("\n\n");
