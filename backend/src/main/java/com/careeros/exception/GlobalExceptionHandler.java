@@ -1,6 +1,8 @@
 package com.careeros.exception;
 
+import com.careeros.application.ApplicationNotFoundException;
 import com.careeros.resume.ResumeNotFoundException;
+import com.careeros.roadmap.RoadmapNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
