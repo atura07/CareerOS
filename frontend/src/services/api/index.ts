@@ -23,7 +23,18 @@ export {
   updateRoadmap,
   deleteRoadmap,
 } from './roadmapService'
-export { analyzeResumeById, analyzeText, analyzeResumeAgainstJobDescription } from './atsService'
+export {
+  analyzeResumeById,
+  analyzeText,
+  analyzeResumeAgainstJobDescription,
+  getOverallAts,
+  analyzeJobMatch,
+} from './atsService'
+export type {
+  AtsDetailedResponse,
+  CategoryBreakdown,
+  AtsJobAnalysisRequest,
+} from './atsService'
 export {
   getCompanies,
   getCompanyBySlug,

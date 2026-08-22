@@ -256,6 +256,45 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
             ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS recommended_dsa_topics TEXT;
             ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS interview_readiness VARCHAR(50);
             ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS personalized_message TEXT;
+
+            -- 9. ATS Analyses table
+            CREATE TABLE IF NOT EXISTS ats_analyses (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                resume_id BIGINT NOT NULL REFERENCES resumes(id) ON DELETE CASCADE,
+                analysis_mode VARCHAR(50) NOT NULL,
+                job_title VARCHAR(255),
+                company_name VARCHAR(255),
+                job_description_hash VARCHAR(64),
+                overall_score INT,
+                job_match_score INT,
+                completeness_score INT,
+                ats_compatibility_score INT,
+                skills_score INT,
+                experience_score INT,
+                impact_score INT,
+                language_score INT,
+                required_skills_score INT,
+                keyword_score INT,
+                responsibility_score INT,
+                eligibility_score INT,
+                semantic_score INT,
+                matched_skills_json TEXT,
+                missing_skills_json TEXT,
+                additional_skills_json TEXT,
+                matched_keywords_json TEXT,
+                missing_keywords_json TEXT,
+                breakdown_json TEXT,
+                strengths_json TEXT,
+                improvements_json TEXT,
+                warnings_json TEXT,
+                summary TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_ats_analyses_user_id ON ats_analyses(user_id);
+            CREATE INDEX IF NOT EXISTS idx_ats_analyses_resume_id ON ats_analyses(resume_id);
+            CREATE INDEX IF NOT EXISTS idx_ats_analyses_lookup ON ats_analyses(resume_id, analysis_mode, job_description_hash);
         """;
 
         try (Connection conn = dataSource.getConnection();
@@ -302,7 +341,11 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
             "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS detailed_feedback TEXT",
             "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS recommended_dsa_topics TEXT",
             "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS interview_readiness VARCHAR(50)",
-            "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS personalized_message TEXT"
+            "ALTER TABLE interview_reports ADD COLUMN IF NOT EXISTS personalized_message TEXT",
+            "CREATE TABLE IF NOT EXISTS ats_analyses (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, resume_id BIGINT NOT NULL REFERENCES resumes(id) ON DELETE CASCADE, analysis_mode VARCHAR(50) NOT NULL, job_title VARCHAR(255), company_name VARCHAR(255), job_description_hash VARCHAR(64), overall_score INT, job_match_score INT, completeness_score INT, ats_compatibility_score INT, skills_score INT, experience_score INT, impact_score INT, language_score INT, required_skills_score INT, keyword_score INT, responsibility_score INT, eligibility_score INT, semantic_score INT, matched_skills_json TEXT, missing_skills_json TEXT, additional_skills_json TEXT, matched_keywords_json TEXT, missing_keywords_json TEXT, breakdown_json TEXT, strengths_json TEXT, improvements_json TEXT, warnings_json TEXT, summary TEXT, created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP NOT NULL DEFAULT NOW())",
+            "CREATE INDEX IF NOT EXISTS idx_ats_analyses_user_id ON ats_analyses(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_ats_analyses_resume_id ON ats_analyses(resume_id)",
+            "CREATE INDEX IF NOT EXISTS idx_ats_analyses_lookup ON ats_analyses(resume_id, analysis_mode, job_description_hash)"
         };
 
         try (Connection conn = dataSource.getConnection();

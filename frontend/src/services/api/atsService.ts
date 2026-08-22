@@ -2,9 +2,69 @@ import { httpClient } from './httpClient'
 import { ENDPOINTS } from './endpoints'
 import type { AtsResponse, AnalyzeTextRequest, ATSAnalysisResponse } from './types'
 
+export interface CategoryBreakdown {
+  category: string
+  score: number
+  maxScore: number
+  percentage: number
+  feedback: string
+}
+
+export interface AtsDetailedResponse {
+  analysisMode: 'OVERALL' | 'JOB_SPECIFIC'
+  resumeId: number
+  jobTitle?: string
+  companyName?: string
+  overallScore: number
+  readinessLevel: string
+  jobMatchScore?: number | null
+  matchLevel?: string | null
+  summary: string
+  breakdown: CategoryBreakdown[]
+  matchedSkills: string[]
+  missingSkills: string[]
+  additionalResumeSkills: string[]
+  matchedKeywords: string[]
+  missingKeywords: string[]
+  keywordMatchPercentage: number
+  strengths: string[]
+  improvements: string[]
+  warnings: string[]
+  analyzedAt: string
+}
+
+export interface AtsJobAnalysisRequest {
+  jobTitle?: string
+  companyName?: string
+  jobDescription: string
+}
+
 /**
- * Analyze a previously uploaded resume by its ID.
- * GET /api/v1/ats/analyze/{resumeId}?userId={userId}
+ * MODE 1: Get deterministic Overall ATS Readiness for a resume.
+ * GET /api/v1/ats/resumes/{resumeId}/overall
+ */
+export async function getOverallAts(resumeId: number): Promise<AtsDetailedResponse> {
+  const response = await httpClient.get<AtsDetailedResponse>(ENDPOINTS.ATS_OVERALL(resumeId))
+  return response.data
+}
+
+/**
+ * MODE 2: Analyze resume match against a specific Job Description.
+ * POST /api/v1/ats/resumes/{resumeId}/analyze-job
+ */
+export async function analyzeJobMatch(
+  resumeId: number,
+  request: AtsJobAnalysisRequest,
+): Promise<AtsDetailedResponse> {
+  const response = await httpClient.post<AtsDetailedResponse>(
+    ENDPOINTS.ATS_ANALYZE_JOB(resumeId),
+    request,
+  )
+  return response.data
+}
+
+/**
+ * Legacy: Analyze a previously uploaded resume by its ID.
  */
 export async function analyzeResumeById(
   resumeId: number,
@@ -18,8 +78,7 @@ export async function analyzeResumeById(
 }
 
 /**
- * Analyze raw extracted text directly.
- * POST /api/v1/ats/analyze/text
+ * Legacy: Analyze raw extracted text directly.
  */
 export async function analyzeText(
   data: AnalyzeTextRequest,
@@ -32,8 +91,7 @@ export async function analyzeText(
 }
 
 /**
- * Analyze a resume against a job description.
- * POST /api/ats/analyze
+ * Legacy: Analyze a resume against a job description.
  */
 export async function analyzeResumeAgainstJobDescription(
   resumeId: number,
@@ -45,4 +103,3 @@ export async function analyzeResumeAgainstJobDescription(
   )
   return response.data
 }
-

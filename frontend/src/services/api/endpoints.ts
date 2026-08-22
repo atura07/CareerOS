@@ -19,6 +19,8 @@ export const ENDPOINTS = {
   RESUME_BY_ID: (id: number) => `/v1/resume/${id}`,
 
   // ATS
+  ATS_OVERALL: (resumeId: number) => `/v1/ats/resumes/${resumeId}/overall`,
+  ATS_ANALYZE_JOB: (resumeId: number) => `/v1/ats/resumes/${resumeId}/analyze-job`,
   ATS_ANALYZE_BY_ID: (resumeId: number) => `/v1/ats/analyze/${resumeId}`,
   ATS_ANALYZE_TEXT: '/v1/ats/analyze/text',
   ATS_ANALYZE_JD: '/v1/ats/api/ats/analyze',

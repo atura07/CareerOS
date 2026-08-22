@@ -44,11 +44,18 @@ export function ResumeLibrary({ refreshCounter = 0, onSelectResume }: ResumeLibr
       try {
         const data = await listResumes(1)
         if (!cancelled) {
-          setResumes(data.map(mapBackendResume))
+          const mapped = data.map(mapBackendResume)
+          setResumes(mapped)
+          if (mapped.length > 0) {
+            onSelectResume?.(mapped[0])
+          }
         }
       } catch {
         if (!cancelled) {
           setResumes(MOCK_RESUMES)
+          if (MOCK_RESUMES.length > 0) {
+            onSelectResume?.(MOCK_RESUMES[0])
+          }
         }
       } finally {
         if (!cancelled) setLoading(false)

@@ -1,21 +1,25 @@
 package com.careeros.ats;
 
+import com.careeros.ats.dto.AtsDetailedResponseDto;
+import com.careeros.ats.dto.AtsJobAnalysisRequestDto;
+
 /**
- * Service interface for JD-based ATS analysis.
- * <p>
- * Defines the contract for analyzing a resume against a job description.
- * Implementations perform keyword extraction, matching, and scoring,
- * returning a structured analysis response.
+ * Service interface for Hybrid ATS analysis (Overall and Job-Specific modes).
  */
 public interface AtsAnalysisService {
 
     /**
-     * Analyze a resume against a job description.
-     *
-     * @param resumeId       the ID of the uploaded resume (matches ResumeEntity PK)
-     * @param jobDescription the full job description text
-     * @return ATSAnalysisResponse containing score, matched/missing keywords, and suggestions
+     * Calculate or retrieve latest deterministic Overall ATS Readiness for a user's resume.
+     */
+    AtsDetailedResponseDto getOverallAnalysis(Long resumeId, Long userId);
+
+    /**
+     * Calculate targeted ATS Job Match against a provided Job Description.
+     */
+    AtsDetailedResponseDto analyzeJobMatch(Long resumeId, Long userId, AtsJobAnalysisRequestDto request);
+
+    /**
+     * Legacy / backward-compatible analyze method.
      */
     ATSAnalysisResponse analyze(Long resumeId, String jobDescription);
 }
-
