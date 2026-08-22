@@ -18,6 +18,11 @@ public class AtsDetailedResponseDto {
     private String jobTitle;
     private String companyName;
 
+    // Extraction Metadata
+    private String extractionStatus; // "EXCELLENT", "GOOD", "OCR_USED", "PARTIAL", "FAILED"
+    private String extractionMethod; // "PDFBOX_DIRECT", "OCR_FALLBACK", "POI_DOCX", "HYBRID", "NONE"
+    private Double extractionConfidence;
+
     // Overall Score (Always present)
     private int overallScore;
     private String readinessLevel; // "Needs significant improvement", "Basic ATS readiness", "Good foundation", "Strong ATS readiness", "Excellent ATS readiness"

@@ -15,8 +15,14 @@ COPY src ./src
 RUN mvn clean package -DskipTests -B
 
 # ─── Stage 2 : Runtime ─────────────────────────────────────────────
-# Slim Java 17 JRE image for running the application.
+# Java 17 JRE image for running the application.
 FROM eclipse-temurin:17-jre AS runtime
+
+# Install production Tesseract OCR engine and English language pack
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user to run the application securely.
 RUN useradd --system --home /app --shell /sbin/nologin appuser

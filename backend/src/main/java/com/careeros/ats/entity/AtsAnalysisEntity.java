@@ -40,6 +40,15 @@ public class AtsAnalysisEntity {
     @Column(name = "job_description_hash", length = 64)
     private String jobDescriptionHash;
 
+    @Column(name = "extraction_status", length = 50)
+    private String extractionStatus; // "EXCELLENT", "GOOD", "OCR_USED", "PARTIAL", "FAILED"
+
+    @Column(name = "extraction_method", length = 50)
+    private String extractionMethod; // "PDFBOX_DIRECT", "OCR_FALLBACK", "POI_DOCX", "HYBRID", "NONE"
+
+    @Column(name = "extraction_confidence")
+    private Double extractionConfidence;
+
     @Column(name = "overall_score")
     private Integer overallScore;
 

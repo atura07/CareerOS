@@ -1,5 +1,7 @@
 package com.careeros.resume;
 
+import com.careeros.resume.extraction.ExtractedResumeContent;
+import com.careeros.resume.extraction.ExtractionStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -7,13 +9,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Orchestrates the resume upload flow:
- * validation → storage → parsing → persistence.
+ * Orchestrates the resume upload and extraction flow:
+ * validation → storage → multi-stage parsing → persistence.
  */
 @Service
 @Transactional
@@ -36,11 +38,7 @@ public class ResumeService {
     }
 
     /**
-     * Upload a resume file — validates, stores, parses, and persists metadata.
-     *
-     * @param file   the uploaded multipart file
-     * @param userId the ID of the authenticated user
-     * @return ResumeResponse with metadata and extracted text
+     * Upload a resume file — validates, stores, runs multi-stage extraction, and persists.
      */
     public ResumeResponse uploadResume(MultipartFile file, Long userId) {
         // 1. Validate file
@@ -54,14 +52,20 @@ public class ResumeService {
             throw new ResumeUploadException("Failed to store uploaded file", e);
         }
 
-        // 3. Parse file and extract text
+        // 3. Multi-stage text extraction
         String extractedText;
-        try (InputStream inputStream = Files.newInputStream(
-                storageService.getFilePath(metadata.getStoredFileName()))) {
-            extractedText = parserService.extractText(inputStream, metadata.getFileType());
-        } catch (IOException e) {
+        try {
+            byte[] fileBytes = Files.readAllBytes(storageService.getFilePath(metadata.getStoredFileName()));
+            ExtractedResumeContent content = parserService.extractContent(fileBytes, metadata.getFileType());
+            extractedText = content.getCleanText();
+            log.info("Extraction completed for resume '{}': status={}, method={}, chars={}",
+                    metadata.getOriginalFileName(),
+                    content.getExtractionStatus(),
+                    content.getExtractionMethod(),
+                    content.getCharacterCount());
+        } catch (Exception e) {
             log.warn("Failed to parse resume text for file: {}", metadata.getOriginalFileName(), e);
-            extractedText = "[Parsing failed — file may be corrupted or unreadable]";
+            extractedText = "";
         }
 
         // 4. Save entity to database
@@ -79,6 +83,41 @@ public class ResumeService {
                 saved.getId(), userId, saved.getOriginalFileName());
 
         return ResumeResponse.fromEntity(saved);
+    }
+
+    /**
+     * Heals or re-extracts text for a resume if previously empty, null, or failed.
+     */
+    public ResumeEntity healExtractedTextIfNecessary(ResumeEntity resume) {
+        if (resume == null) return null;
+
+        String text = resume.getExtractedText();
+        boolean needsExtraction = text == null || text.isBlank() || text.startsWith("[Parsing failed");
+
+        if (!needsExtraction) {
+            return resume;
+        }
+
+        log.info("Heal/re-extract triggered for resumeId={}", resume.getId());
+        try {
+            Path filePath = storageService.getFilePath(resume.getStoredFileName());
+            if (Files.exists(filePath)) {
+                byte[] bytes = Files.readAllBytes(filePath);
+                ExtractedResumeContent content = parserService.extractContent(bytes, resume.getFileType());
+                if (content != null && !content.getCleanText().isBlank()) {
+                    resume.setExtractedText(content.getCleanText());
+                    ResumeEntity updated = resumeRepository.save(resume);
+                    log.info("Successfully healed text for resumeId={}: new length={}", resume.getId(), content.getCleanText().length());
+                    return updated;
+                }
+            } else {
+                log.warn("Stored file not found on disk for resumeId={}: {}", resume.getId(), resume.getStoredFileName());
+            }
+        } catch (Exception e) {
+            log.error("Failed to heal extracted text for resumeId={}: {}", resume.getId(), e.getMessage());
+        }
+
+        return resume;
     }
 
     /**
@@ -162,4 +201,3 @@ public class ResumeService {
         return "";
     }
 }
-

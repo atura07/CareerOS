@@ -11,6 +11,8 @@ import com.careeros.ats.service.AtsAiSuggestionService;
 import com.careeros.openai.OpenAIClient;
 import com.careeros.resume.ResumeEntity;
 import com.careeros.resume.ResumeRepository;
+import com.careeros.resume.ResumeService;
+import com.careeros.resume.extraction.ExtractionQualityValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,10 +37,13 @@ class AtsAnalysisTest {
     private KeywordExtractionEngine keywordExtractionEngine;
     private DeterministicAtsScorer deterministicAtsScorer;
     private AtsAiSuggestionService atsAiSuggestionService;
+    private ExtractionQualityValidator extractionQualityValidator;
     private ATSServiceImpl atsService;
 
     @Mock
     private ResumeRepository resumeRepository;
+    @Mock
+    private ResumeService resumeService;
     @Mock
     private AtsAnalysisRepository atsAnalysisRepository;
     @Mock
@@ -94,12 +99,15 @@ class AtsAnalysisTest {
         keywordExtractionEngine = new KeywordExtractionEngine();
         deterministicAtsScorer = new DeterministicAtsScorer(skillTaxonomyEngine, keywordExtractionEngine);
         atsAiSuggestionService = new AtsAiSuggestionService(openAIClient, objectMapper);
+        extractionQualityValidator = new ExtractionQualityValidator();
 
         atsService = new ATSServiceImpl(
                 resumeRepository,
+                resumeService,
                 atsAnalysisRepository,
                 deterministicAtsScorer,
                 atsAiSuggestionService,
+                extractionQualityValidator,
                 objectMapper
         );
     }
@@ -233,6 +241,7 @@ class AtsAnalysisTest {
         resume.setExtractedText(STRONG_RESUME_TEXT);
 
         when(resumeRepository.findById(1L)).thenReturn(Optional.of(resume));
+        when(resumeService.healExtractedTextIfNecessary(any())).thenReturn(resume);
 
         AtsAnalysisEntity cachedEntity = AtsAnalysisEntity.builder()
                 .id(50L)

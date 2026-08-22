@@ -15,6 +15,9 @@ export interface AtsDetailedResponse {
   resumeId: number
   jobTitle?: string
   companyName?: string
+  extractionStatus?: 'EXCELLENT' | 'GOOD' | 'OCR_USED' | 'PARTIAL' | 'FAILED'
+  extractionMethod?: 'PDFBOX_DIRECT' | 'OCR_FALLBACK' | 'POI_DOCX' | 'HYBRID' | 'NONE'
+  extractionConfidence?: number
   overallScore: number
   readinessLevel: string
   jobMatchScore?: number | null

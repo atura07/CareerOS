@@ -16,6 +16,7 @@ import {
   Search,
   Check,
   Plus,
+  Eye,
 } from 'lucide-react'
 import type { ResumeFile } from './types'
 import { getOverallAts, analyzeJobMatch } from '../../services/api'
@@ -162,7 +163,7 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
           </div>
           <p className="mt-0.5 text-xs text-white/50">
             {mode === 'OVERALL'
-              ? 'Deterministic evaluation across 6 core ATS criteria.'
+              ? 'Multi-stage text extraction & deterministic evaluation across 6 core criteria.'
               : 'Targeted keyword & skill match against specific Job Description.'}
           </p>
         </div>
@@ -222,7 +223,7 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
           {loadingOverall ? (
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-white/50 text-xs">
               <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
-              <span>Analyzing resume structure and technical keywords...</span>
+              <span>Running multi-stage extraction and ATS evaluation...</span>
             </div>
           ) : overallData ? (
             <>
@@ -231,9 +232,27 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                 <div className="flex items-center gap-4">
                   <ScoreRing score={overallData.overallScore} />
                   <div>
-                    <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-400">
-                      <Sparkles className="h-3 w-3" /> {overallData.readinessLevel}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-400">
+                        <Sparkles className="h-3 w-3" /> {overallData.readinessLevel}
+                      </span>
+
+                      {/* Extraction Status Badge */}
+                      {overallData.extractionMethod === 'OCR_FALLBACK' || overallData.extractionStatus === 'OCR_USED' ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-purple-300">
+                          <Eye className="h-3 w-3" /> OCR-assisted analysis
+                        </span>
+                      ) : overallData.extractionMethod === 'POI_DOCX' ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
+                          <FileText className="h-3 w-3" /> DOCX structured extraction
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-semibold text-white/70">
+                          <FileText className="h-3 w-3" /> Text extracted directly
+                        </span>
+                      )}
+                    </div>
+
                     <h3 className="mt-1.5 text-sm sm:text-base font-bold text-white/90">
                       Overall ATS Readiness
                     </h3>
@@ -448,9 +467,16 @@ export function JobDescriptionAnalyzer({ resume }: JobDescriptionAnalyzerProps) 
                 <div className="flex items-center gap-4">
                   <ScoreRing score={jobMatchData.jobMatchScore || 0} />
                   <div>
-                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
-                      <Sparkles className="h-3 w-3" /> {jobMatchData.matchLevel}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
+                        <Sparkles className="h-3 w-3" /> {jobMatchData.matchLevel}
+                      </span>
+                      {jobMatchData.extractionMethod === 'OCR_FALLBACK' && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[10px] font-semibold text-purple-300">
+                          OCR-assisted
+                        </span>
+                      )}
+                    </div>
                     <h3 className="mt-1 text-sm sm:text-base font-bold text-white/90">
                       Target Match: {jobMatchData.jobTitle || 'Target Role'}{' '}
                       {jobMatchData.companyName ? `at ${jobMatchData.companyName}` : ''}

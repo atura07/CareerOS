@@ -266,6 +266,9 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
                 job_title VARCHAR(255),
                 company_name VARCHAR(255),
                 job_description_hash VARCHAR(64),
+                extraction_status VARCHAR(50),
+                extraction_method VARCHAR(50),
+                extraction_confidence DOUBLE PRECISION,
                 overall_score INT,
                 job_match_score INT,
                 completeness_score INT,
@@ -295,6 +298,10 @@ public class DatabaseMigrationRunner implements BeanPostProcessor {
             CREATE INDEX IF NOT EXISTS idx_ats_analyses_user_id ON ats_analyses(user_id);
             CREATE INDEX IF NOT EXISTS idx_ats_analyses_resume_id ON ats_analyses(resume_id);
             CREATE INDEX IF NOT EXISTS idx_ats_analyses_lookup ON ats_analyses(resume_id, analysis_mode, job_description_hash);
+
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS extraction_status VARCHAR(50);
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS extraction_method VARCHAR(50);
+            ALTER TABLE ats_analyses ADD COLUMN IF NOT EXISTS extraction_confidence DOUBLE PRECISION;
         """;
 
         try (Connection conn = dataSource.getConnection();

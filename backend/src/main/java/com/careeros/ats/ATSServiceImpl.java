@@ -9,6 +9,9 @@ import com.careeros.ats.service.AtsAiSuggestionService;
 import com.careeros.resume.ResumeEntity;
 import com.careeros.resume.ResumeNotFoundException;
 import com.careeros.resume.ResumeRepository;
+import com.careeros.resume.ResumeService;
+import com.careeros.resume.extraction.ExtractionQualityValidator;
+import com.careeros.resume.extraction.ExtractionStatus;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -30,9 +33,11 @@ import java.util.*;
 public class ATSServiceImpl implements AtsAnalysisService {
 
     private final ResumeRepository resumeRepository;
+    private final ResumeService resumeService;
     private final AtsAnalysisRepository atsAnalysisRepository;
     private final DeterministicAtsScorer deterministicAtsScorer;
     private final AtsAiSuggestionService atsAiSuggestionService;
+    private final ExtractionQualityValidator extractionQualityValidator;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -41,6 +46,9 @@ public class ATSServiceImpl implements AtsAnalysisService {
         log.info("[ATS] getOverallAnalysis for resumeId={}, userId={}", resumeId, userId);
 
         ResumeEntity resume = fetchAndValidateResume(resumeId, userId);
+
+        // Multi-stage extraction healing if text is missing, empty, or previously marked as failed
+        resume = resumeService.healExtractedTextIfNecessary(resume);
         String extractedText = resume.getExtractedText();
 
         if (extractedText == null || extractedText.isBlank() || extractedText.startsWith("[Parsing failed")) {
@@ -48,9 +56,12 @@ public class ATSServiceImpl implements AtsAnalysisService {
             return AtsDetailedResponseDto.builder()
                     .analysisMode("OVERALL")
                     .resumeId(resumeId)
+                    .extractionStatus(ExtractionStatus.FAILED.name())
+                    .extractionMethod("NONE")
+                    .extractionConfidence(0.0)
                     .overallScore(0)
                     .readinessLevel("Needs significant improvement")
-                    .summary("We could not extract readable text from this resume. Please upload a text-based PDF or DOCX.")
+                    .summary("We could not extract readable text from this resume. All text and OCR extraction stages failed. Please upload a clear PDF or DOCX.")
                     .breakdown(Collections.emptyList())
                     .matchedSkills(Collections.emptyList())
                     .missingSkills(Collections.emptyList())
@@ -60,7 +71,7 @@ public class ATSServiceImpl implements AtsAnalysisService {
                     .keywordMatchPercentage(0.0)
                     .strengths(Collections.emptyList())
                     .improvements(List.of("Upload a clean, text-based PDF or DOCX file to enable full ATS analysis."))
-                    .warnings(List.of("Unreadable or image-only resume detected."))
+                    .warnings(List.of("Unreadable document or corrupted file detected."))
                     .analyzedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
                     .build();
         }
@@ -71,11 +82,17 @@ public class ATSServiceImpl implements AtsAnalysisService {
 
         if (cachedOpt.isPresent()) {
             AtsAnalysisEntity cached = cachedOpt.get();
-            // Reuse cache if created recently and valid
             if (cached.getCreatedAt() != null && cached.getOverallScore() != null) {
                 log.info("[ATS] Returning cached overall analysis for resumeId={}", resumeId);
                 return mapEntityToDto(cached);
             }
+        }
+
+        // Assess extraction quality
+        ExtractionQualityValidator.QualityAssessment quality = extractionQualityValidator.assess(extractedText);
+        String extractionMethod = "docx".equalsIgnoreCase(resume.getFileType()) ? "POI_DOCX" : "PDFBOX_DIRECT";
+        if (quality.status() == ExtractionStatus.OCR_USED) {
+            extractionMethod = "OCR_FALLBACK";
         }
 
         // Perform deterministic analysis
@@ -99,6 +116,9 @@ public class ATSServiceImpl implements AtsAnalysisService {
                 .userId(userId)
                 .resumeId(resumeId)
                 .analysisMode("OVERALL")
+                .extractionStatus(quality.status().name())
+                .extractionMethod(extractionMethod)
+                .extractionConfidence(quality.confidence())
                 .overallScore(scoreResult.overallScore())
                 .completenessScore(scoreResult.completenessScore())
                 .atsCompatibilityScore(scoreResult.atsCompatibilityScore())
@@ -131,6 +151,7 @@ public class ATSServiceImpl implements AtsAnalysisService {
                 resumeId, userId, request != null ? request.getJobTitle() : "N/A");
 
         ResumeEntity resume = fetchAndValidateResume(resumeId, userId);
+        resume = resumeService.healExtractedTextIfNecessary(resume);
         String extractedText = resume.getExtractedText();
 
         if (request == null || request.getJobDescription() == null || request.getJobDescription().trim().isBlank()) {
@@ -147,6 +168,13 @@ public class ATSServiceImpl implements AtsAnalysisService {
         if (cachedOpt.isPresent()) {
             log.info("[ATS] Returning cached job match analysis for resumeId={} and jdHash={}", resumeId, jdHash);
             return mapEntityToDto(cachedOpt.get());
+        }
+
+        // Assess extraction quality
+        ExtractionQualityValidator.QualityAssessment quality = extractionQualityValidator.assess(extractedText);
+        String extractionMethod = "docx".equalsIgnoreCase(resume.getFileType()) ? "POI_DOCX" : "PDFBOX_DIRECT";
+        if (quality.status() == ExtractionStatus.OCR_USED) {
+            extractionMethod = "OCR_FALLBACK";
         }
 
         // Perform deterministic analysis for both Overall and Job Match
@@ -178,6 +206,9 @@ public class ATSServiceImpl implements AtsAnalysisService {
                 .jobTitle(request.getJobTitle())
                 .companyName(request.getCompanyName())
                 .jobDescriptionHash(jdHash)
+                .extractionStatus(quality.status().name())
+                .extractionMethod(extractionMethod)
+                .extractionConfidence(quality.confidence())
                 .overallScore(overallResult.overallScore())
                 .jobMatchScore(jobResult.jobMatchScore())
                 .completenessScore(overallResult.completenessScore())
@@ -213,7 +244,7 @@ public class ATSServiceImpl implements AtsAnalysisService {
     @Transactional
     public ATSAnalysisResponse analyze(Long resumeId, String jobDescription) {
         log.info("[ATS] Legacy analyze called for resumeId={}", resumeId);
-        Long userId = 1L; // fallback userId for legacy caller
+        Long userId = 1L;
         Optional<ResumeEntity> rOpt = resumeRepository.findById(resumeId);
         if (rOpt.isPresent()) {
             userId = rOpt.get().getUserId();
@@ -288,6 +319,9 @@ public class ATSServiceImpl implements AtsAnalysisService {
                 .resumeId(entity.getResumeId())
                 .jobTitle(entity.getJobTitle())
                 .companyName(entity.getCompanyName())
+                .extractionStatus(entity.getExtractionStatus())
+                .extractionMethod(entity.getExtractionMethod())
+                .extractionConfidence(entity.getExtractionConfidence())
                 .overallScore(entity.getOverallScore() != null ? entity.getOverallScore() : 0)
                 .readinessLevel(readinessLevel)
                 .jobMatchScore(entity.getJobMatchScore())
